@@ -235,6 +235,10 @@ def ticket_mensagem(id):
     )
     db.session.add(mensagem)
     chamado.data_atualizacao = datetime.utcnow()
+    # Resposta do cliente reativa o atendimento: RESPONDIDO/EM_ANDAMENTO → EM_ANDAMENTO.
+    # ABERTO permanece ABERTO (ainda não houve primeiro atendimento).
+    if chamado.status_chamado in ('RESPONDIDO', 'EM_ANDAMENTO'):
+        chamado.status_chamado = 'EM_ANDAMENTO'
     db.session.commit()
     flash('Mensagem enviada.', 'success')
     return redirect(url_for('client.ticket_detalhe', id=id))

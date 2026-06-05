@@ -11,11 +11,11 @@ class Plano(db.Model):
     id_plano = db.Column(db.Integer, primary_key=True)
     nome_plano = db.Column(db.String(50), nullable=False, unique=True)
     descricao = db.Column(db.Text)
-    valor_mensal = db.Column(db.Numeric(10, 2))
-    qtd_analises_mes = db.Column(db.Integer)
-    tipo_analise_permitida = db.Column(db.String(20))   # MENSAL, QUINZENAL
-    nivel_entrega_analise = db.Column(db.String(20))    # BASICA, COMPLETA, PREMIUM
-    nivel_dashboard = db.Column(db.String(20))           # RESUMIDO, GERENCIAL, COMPLETO
+    valor_mensal = db.Column(db.Numeric(10, 2), nullable=False)
+    qtd_analises_mes = db.Column(db.Integer, nullable=False)
+    tipo_analise_permitida = db.Column(db.String(20), nullable=False)   # MENSAL, QUINZENAL
+    nivel_entrega_analise = db.Column(db.String(20), nullable=False)    # BASICA, COMPLETA, PREMIUM
+    nivel_dashboard = db.Column(db.String(20), nullable=False)           # RESUMIDO, GERENCIAL, COMPLETO
     nivel_atendimento = db.Column(db.String(10), nullable=False)  # BAIXO, MEDIO, ALTO
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -30,13 +30,13 @@ class Plano(db.Model):
         CheckConstraint("nome_plano IN ('BRONZE','PRATA','OURO')", name='ck_plano_nome'),
         CheckConstraint("nivel_atendimento IN ('BAIXO','MEDIO','ALTO')", name='ck_plano_nivel'),
         CheckConstraint(
-            "tipo_analise_permitida IS NULL OR tipo_analise_permitida IN ('MENSAL','QUINZENAL')",
+            "tipo_analise_permitida IN ('MENSAL','QUINZENAL')",
             name='ck_plano_tipo_analise'),
         CheckConstraint(
-            "nivel_entrega_analise IS NULL OR nivel_entrega_analise IN ('BASICA','COMPLETA','PREMIUM')",
+            "nivel_entrega_analise IN ('BASICA','COMPLETA','PREMIUM')",
             name='ck_plano_nivel_entrega'),
         CheckConstraint(
-            "nivel_dashboard IS NULL OR nivel_dashboard IN ('RESUMIDO','GERENCIAL','COMPLETO')",
+            "nivel_dashboard IN ('RESUMIDO','GERENCIAL','COMPLETO')",
             name='ck_plano_nivel_dashboard'),
     )
 
@@ -64,14 +64,14 @@ class Empresa(db.Model):
     __tablename__ = 'empresa'
 
     id_empresa = db.Column(db.Integer, primary_key=True)
-    id_segmento = db.Column(db.Integer, db.ForeignKey('segmento.id_segmento'), nullable=True)
+    id_segmento = db.Column(db.Integer, db.ForeignKey('segmento.id_segmento'), nullable=False)
     id_plano_atual = db.Column(db.Integer, db.ForeignKey('plano.id_plano'), nullable=False)
-    cnpj = db.Column(db.String(18), unique=True)
-    razao_social = db.Column(db.String(200))
-    nome_fantasia = db.Column(db.String(200), nullable=False)
-    email_contato = db.Column(db.String(200))
+    cnpj = db.Column(db.String(18), unique=True, nullable=False)
+    razao_social = db.Column(db.String(200), nullable=False)
+    nome_fantasia = db.Column(db.String(200))
+    email_contato = db.Column(db.String(200), nullable=False)
     telefone_contato = db.Column(db.String(20))
-    data_contratacao = db.Column(db.Date)
+    data_contratacao = db.Column(db.Date, nullable=False)
     faturamento_base_mensal = db.Column(db.Numeric(15, 2))
     status_conta = db.Column(db.String(20), nullable=False, default='ATIVA')
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -90,6 +90,11 @@ class Empresa(db.Model):
         Index('ix_empresa_id_segmento', 'id_segmento'),
         Index('ix_empresa_id_plano_atual', 'id_plano_atual'),
     )
+
+    @property
+    def nome_exibicao(self):
+        """Nome fantasia é opcional; usa razão social como fallback."""
+        return self.nome_fantasia or self.razao_social
 
 
 class Usuario(UserMixin, db.Model):
@@ -159,8 +164,8 @@ class Analise(db.Model):
     id_plano_referencia = db.Column(db.Integer, db.ForeignKey('plano.id_plano'), nullable=False)
     id_usuario_admin_responsavel = db.Column(db.Integer, db.ForeignKey('usuario.id_usuario'),
                                              nullable=False)
-    periodo_inicio = db.Column(db.Date, nullable=True)
-    periodo_fim = db.Column(db.Date, nullable=True)
+    periodo_inicio = db.Column(db.Date, nullable=False)
+    periodo_fim = db.Column(db.Date, nullable=False)
     mes_referencia = db.Column(db.Integer, nullable=False)
     ano_referencia = db.Column(db.Integer, nullable=False)
     tipo_analise = db.Column(db.String(20), nullable=False)   # MENSAL, QUINZENAL
@@ -186,9 +191,12 @@ class Analise(db.Model):
             "status_analise IN ('AGUARDANDO_RELATORIO','RELATORIO_RECEBIDO','EM_ANALISE','CONCLUIDO')",
             name='ck_analise_status'),
         CheckConstraint("tipo_analise IN ('MENSAL','QUINZENAL')", name='ck_analise_tipo'),
+        CheckConstraint("mes_referencia BETWEEN 1 AND 12", name='ck_analise_mes'),
+        CheckConstraint("periodo_fim >= periodo_inicio", name='ck_analise_periodo'),
         CheckConstraint(
             "(tipo_analise = 'MENSAL' AND quinzena_referencia IS NULL) OR "
-            "(tipo_analise = 'QUINZENAL' AND quinzena_referencia IN (1, 2))",
+            "(tipo_analise = 'QUINZENAL' AND quinzena_referencia IS NOT NULL "
+            "AND quinzena_referencia IN (1, 2))",
             name='ck_analise_quinzena'),
         Index('ix_analise_id_empresa', 'id_empresa'),
         Index('ix_analise_id_plano', 'id_plano_referencia'),
@@ -322,6 +330,8 @@ class ChamadoSuporte(db.Model):
             name='ck_chamado_status'),
         CheckConstraint("prioridade_atendimento IN ('BAIXA','MEDIA','ALTA')",
                         name='ck_chamado_prioridade'),
+        CheckConstraint("length(trim(assunto)) > 0", name='ck_chamado_assunto'),
+        CheckConstraint("length(trim(descricao)) > 0", name='ck_chamado_descricao'),
         Index('ix_chamado_id_empresa', 'id_empresa'),
         Index('ix_chamado_id_usuario', 'id_usuario_cliente_autor'),
     )
@@ -341,6 +351,7 @@ class MensagemSuporte(db.Model):
     autor = db.relationship('Usuario', foreign_keys=[id_usuario_autor], back_populates='mensagens')
 
     __table_args__ = (
+        CheckConstraint("length(trim(conteudo)) > 0", name='ck_mensagem_conteudo'),
         Index('ix_mensagem_id_chamado', 'id_chamado'),
         Index('ix_mensagem_id_autor', 'id_usuario_autor'),
     )

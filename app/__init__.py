@@ -13,7 +13,10 @@ login_manager = LoginManager()
 def create_app():
     app = Flask(__name__, instance_relative_config=True)
 
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
+    secret_key = os.environ.get('SECRET_KEY')
+    if not secret_key:
+        raise RuntimeError('SECRET_KEY não definida. Crie um .env a partir de .env.example.')
+    app.config['SECRET_KEY'] = secret_key
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
         'DATABASE_URL',
         'sqlite:///' + os.path.join(app.instance_path, 'nexo_mvp.db')

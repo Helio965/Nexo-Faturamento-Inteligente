@@ -14,24 +14,24 @@
     <form method="POST">
       <div class="row g-3">
         <div class="col-md-6">
-          <label class="form-label">Nome Fantasia <span class="text-danger">*</span></label>
+          <label class="form-label">Nome Fantasia</label>
           <input type="text" class="form-control" name="nome_fantasia"
-                 value="{{ empresa.nome_fantasia if empresa }}" required>
+                 value="{{ empresa.nome_fantasia if empresa }}">
         </div>
         <div class="col-md-6">
-          <label class="form-label">Razão Social</label>
+          <label class="form-label">Razão Social <span class="text-danger">*</span></label>
           <input type="text" class="form-control" name="razao_social"
-                 value="{{ empresa.razao_social if empresa }}">
+                 value="{{ empresa.razao_social if empresa }}" required>
         </div>
         <div class="col-md-6">
-          <label class="form-label">CNPJ</label>
+          <label class="form-label">CNPJ <span class="text-danger">*</span></label>
           <input type="text" class="form-control" name="cnpj"
-                 value="{{ empresa.cnpj if empresa }}" placeholder="00.000.000/0000-00">
+                 value="{{ empresa.cnpj if empresa }}" placeholder="00.000.000/0000-00" required>
         </div>
         <div class="col-md-6">
-          <label class="form-label">E-mail de Contato</label>
+          <label class="form-label">E-mail de Contato <span class="text-danger">*</span></label>
           <input type="email" class="form-control" name="email_contato"
-                 value="{{ empresa.email_contato if empresa }}">
+                 value="{{ empresa.email_contato if empresa }}" required>
         </div>
         <div class="col-md-6">
           <label class="form-label">Telefone de Contato</label>
@@ -39,9 +39,9 @@
                  value="{{ empresa.telefone_contato if empresa }}" placeholder="(00) 00000-0000">
         </div>
         <div class="col-md-6">
-          <label class="form-label">Data de Contratação</label>
+          <label class="form-label">Data de Contratação <span class="text-danger">*</span></label>
           <input type="date" class="form-control" name="data_contratacao"
-                 value="{{ empresa.data_contratacao.strftime('%Y-%m-%d') if empresa and empresa.data_contratacao }}">
+                 value="{{ empresa.data_contratacao.strftime('%Y-%m-%d') if empresa and empresa.data_contratacao }}" required>
         </div>
         <div class="col-md-6">
           <label class="form-label">Faturamento Base Mensal (R$)</label>
@@ -60,9 +60,9 @@
           </select>
         </div>
         <div class="col-md-6">
-          <label class="form-label">Segmento</label>
-          <select class="form-select" name="id_segmento">
-            <option value="">— Selecione —</option>
+          <label class="form-label">Segmento <span class="text-danger">*</span></label>
+          <select class="form-select" name="id_segmento" required>
+            <option value="" disabled {{ 'selected' if not empresa }}>— Selecione —</option>
             {% for s in segmentos %}
             <option value="{{ s.id_segmento }}"
               {{ 'selected' if empresa and empresa.id_segmento == s.id_segmento }}>

@@ -11,23 +11,20 @@ CREATE TABLE IF NOT EXISTS plano (
     id_plano                 INTEGER PRIMARY KEY AUTOINCREMENT,
     nome_plano               TEXT    NOT NULL UNIQUE,
     descricao                TEXT,
-    valor_mensal             REAL,
-    qtd_analises_mes         INTEGER,
-    tipo_analise_permitida   TEXT,
-    nivel_entrega_analise    TEXT,
-    nivel_dashboard          TEXT,
+    valor_mensal             REAL    NOT NULL,
+    qtd_analises_mes         INTEGER NOT NULL,
+    tipo_analise_permitida   TEXT    NOT NULL,
+    nivel_entrega_analise    TEXT    NOT NULL,
+    nivel_dashboard          TEXT    NOT NULL,
     nivel_atendimento        TEXT    NOT NULL,
     ativo                    INTEGER NOT NULL DEFAULT 1,
     data_criacao             TEXT    NOT NULL DEFAULT (datetime('now')),
     data_atualizacao         TEXT    NOT NULL DEFAULT (datetime('now')),
     CONSTRAINT ck_plano_nome          CHECK (nome_plano             IN ('BRONZE','PRATA','OURO')),
     CONSTRAINT ck_plano_nivel         CHECK (nivel_atendimento      IN ('BAIXO','MEDIO','ALTO')),
-    CONSTRAINT ck_plano_tipo_analise  CHECK (tipo_analise_permitida IS NULL
-                                             OR tipo_analise_permitida IN ('MENSAL','QUINZENAL')),
-    CONSTRAINT ck_plano_nivel_entrega CHECK (nivel_entrega_analise  IS NULL
-                                             OR nivel_entrega_analise  IN ('BASICA','COMPLETA','PREMIUM')),
-    CONSTRAINT ck_plano_nivel_dash    CHECK (nivel_dashboard        IS NULL
-                                             OR nivel_dashboard        IN ('RESUMIDO','GERENCIAL','COMPLETO'))
+    CONSTRAINT ck_plano_tipo_analise  CHECK (tipo_analise_permitida IN ('MENSAL','QUINZENAL')),
+    CONSTRAINT ck_plano_nivel_entrega CHECK (nivel_entrega_analise  IN ('BASICA','COMPLETA','PREMIUM')),
+    CONSTRAINT ck_plano_nivel_dash    CHECK (nivel_dashboard        IN ('RESUMIDO','GERENCIAL','COMPLETO'))
 );
 
 -- 2. segmento
@@ -43,14 +40,14 @@ CREATE TABLE IF NOT EXISTS segmento (
 -- 3. empresa
 CREATE TABLE IF NOT EXISTS empresa (
     id_empresa               INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_segmento              INTEGER REFERENCES segmento(id_segmento),
+    id_segmento              INTEGER NOT NULL REFERENCES segmento(id_segmento),
     id_plano_atual           INTEGER NOT NULL REFERENCES plano(id_plano),
-    nome_fantasia            TEXT    NOT NULL,
-    razao_social             TEXT,
-    cnpj                     TEXT    UNIQUE,
-    email_contato            TEXT,
+    nome_fantasia            TEXT,
+    razao_social             TEXT    NOT NULL,
+    cnpj                     TEXT    NOT NULL UNIQUE,
+    email_contato            TEXT    NOT NULL,
     telefone_contato         TEXT,
-    data_contratacao         TEXT,
+    data_contratacao         TEXT    NOT NULL,
     faturamento_base_mensal  REAL,
     status_conta             TEXT    NOT NULL DEFAULT 'ATIVA',
     data_criacao             TEXT    NOT NULL DEFAULT (datetime('now')),
@@ -88,8 +85,8 @@ CREATE TABLE IF NOT EXISTS analise (
     id_empresa                    INTEGER NOT NULL REFERENCES empresa(id_empresa),
     id_plano_referencia           INTEGER NOT NULL REFERENCES plano(id_plano),
     id_usuario_admin_responsavel  INTEGER NOT NULL REFERENCES usuario(id_usuario),
-    periodo_inicio                TEXT,
-    periodo_fim                   TEXT,
+    periodo_inicio                TEXT    NOT NULL,
+    periodo_fim                   TEXT    NOT NULL,
     tipo_analise                  TEXT    NOT NULL,
     mes_referencia                INTEGER NOT NULL,
     ano_referencia                INTEGER NOT NULL,
@@ -102,9 +99,12 @@ CREATE TABLE IF NOT EXISTS analise (
         'AGUARDANDO_RELATORIO','RELATORIO_RECEBIDO','EM_ANALISE','CONCLUIDO'
     )),
     CONSTRAINT ck_analise_tipo     CHECK (tipo_analise IN ('MENSAL','QUINZENAL')),
+    CONSTRAINT ck_analise_mes      CHECK (mes_referencia BETWEEN 1 AND 12),
+    CONSTRAINT ck_analise_periodo  CHECK (periodo_fim >= periodo_inicio),
     CONSTRAINT ck_analise_quinzena CHECK (
         (tipo_analise = 'MENSAL'    AND quinzena_referencia IS NULL) OR
-        (tipo_analise = 'QUINZENAL' AND quinzena_referencia IN (1, 2))
+        (tipo_analise = 'QUINZENAL' AND quinzena_referencia IS NOT NULL
+                                    AND quinzena_referencia IN (1, 2))
     )
 );
 
@@ -188,7 +188,9 @@ CREATE TABLE IF NOT EXISTS chamado_suporte (
     data_atualizacao         TEXT    NOT NULL DEFAULT (datetime('now')),
     data_fechamento          TEXT,
     CONSTRAINT ck_chamado_status     CHECK (status_chamado         IN ('ABERTO','EM_ANDAMENTO','RESPONDIDO','RESOLVIDO')),
-    CONSTRAINT ck_chamado_prioridade CHECK (prioridade_atendimento IN ('BAIXA','MEDIA','ALTA'))
+    CONSTRAINT ck_chamado_prioridade CHECK (prioridade_atendimento IN ('BAIXA','MEDIA','ALTA')),
+    CONSTRAINT ck_chamado_assunto    CHECK (length(trim(assunto))   > 0),
+    CONSTRAINT ck_chamado_descricao  CHECK (length(trim(descricao)) > 0)
 );
 
 CREATE INDEX IF NOT EXISTS ix_chamado_id_empresa ON chamado_suporte(id_empresa);
@@ -200,7 +202,8 @@ CREATE TABLE IF NOT EXISTS mensagem_suporte (
     id_chamado       INTEGER NOT NULL REFERENCES chamado_suporte(id_chamado),
     id_usuario_autor INTEGER NOT NULL REFERENCES usuario(id_usuario),
     conteudo         TEXT    NOT NULL,
-    data_envio       TEXT    NOT NULL DEFAULT (datetime('now'))
+    data_envio       TEXT    NOT NULL DEFAULT (datetime('now')),
+    CONSTRAINT ck_mensagem_conteudo CHECK (length(trim(conteudo)) > 0)
 );
 
 CREATE INDEX IF NOT EXISTS ix_mensagem_id_chamado ON mensagem_suporte(id_chamado);
