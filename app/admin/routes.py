@@ -23,6 +23,11 @@ def _requer_admin():
         abort(403)
 
 
+def _empresa_ativa(analise):
+    """Entrega ao CLIENTE (upload/processamento/publicação) exige empresa ATIVA."""
+    return analise.empresa.status_conta == 'ATIVA'
+
+
 def _periodo_analise(mes, ano, tipo, quinzena):
     """Calcula periodo_inicio e periodo_fim conforme tipo e quinzena."""
     if tipo == 'QUINZENAL':
@@ -50,7 +55,7 @@ def dashboard():
         Analise.status_analise.in_(['AGUARDANDO_RELATORIO', 'RELATORIO_RECEBIDO', 'EM_ANALISE'])
     ).count()
     tickets_abertos = ChamadoSuporte.query.filter(
-        ChamadoSuporte.status_chamado.in_(['ABERTO', 'EM_ANDAMENTO'])
+        ChamadoSuporte.status_chamado.in_(['ABERTO', 'EM_ANDAMENTO', 'RESPONDIDO'])
     ).count()
 
     # Indicadores operacionais — empresas por status_conta
@@ -209,14 +214,25 @@ def empresa_editar(id):
             return render_template('admin/empresa_form.html', planos=planos,
                                    segmentos=segmentos, empresa=empresa)
 
+        novo_status = request.form.get('status_conta', 'ATIVA')
+        novo_plano = int(id_plano)
+        # Empresa CANCELADA não pode trocar de plano enquanto continuar cancelada.
+        # A troca só é liberada se for acompanhada de reativação (novo_status != CANCELADA).
+        if (empresa.status_conta == 'CANCELADA' and novo_status == 'CANCELADA'
+                and novo_plano != empresa.id_plano_atual):
+            flash('Empresa CANCELADA não pode ter plano alterado. Reative a '
+                  'empresa antes de alterar o plano.', 'danger')
+            return render_template('admin/empresa_form.html', planos=planos,
+                                   segmentos=segmentos, empresa=empresa)
+
         empresa.nome_fantasia = request.form.get('nome_fantasia', '').strip() or None
         empresa.razao_social = razao_social
         empresa.cnpj = cnpj
         empresa.email_contato = email_contato
         empresa.telefone_contato = request.form.get('telefone_contato', '').strip() or None
-        empresa.id_plano_atual = int(id_plano)
+        empresa.id_plano_atual = novo_plano
         empresa.id_segmento = int(id_seg)
-        empresa.status_conta = request.form.get('status_conta', 'ATIVA')
+        empresa.status_conta = novo_status
         fat_base = request.form.get('faturamento_base_mensal', '').strip()
         empresa.faturamento_base_mensal = float(fat_base) if fat_base else None
         empresa.data_contratacao = data_contratacao
@@ -282,7 +298,25 @@ def usuario_toggle(id):
     if u.is_admin:
         flash('Não é possível desativar um administrador por aqui.', 'warning')
         return redirect(url_for('admin.dashboard'))
-    u.ativo = not u.ativo
+
+    vai_ativar = not u.ativo
+    # Reativação de CLIENTE precisa respeitar as mesmas regras da criação:
+    # empresa não CANCELADA e no máximo um CLIENTE ativo por empresa.
+    if vai_ativar and u.role == 'CLIENTE':
+        if u.empresa and u.empresa.status_conta == 'CANCELADA':
+            flash('Não é possível reativar CLIENTE de empresa CANCELADA.', 'danger')
+            return redirect(url_for('admin.empresa_detalhe', id=u.id_empresa))
+        outro_ativo = Usuario.query.filter(
+            Usuario.id_empresa == u.id_empresa,
+            Usuario.role == 'CLIENTE',
+            Usuario.ativo.is_(True),
+            Usuario.id_usuario != u.id_usuario).first()
+        if outro_ativo:
+            flash('Esta empresa já possui outro usuário CLIENTE ativo. Desative '
+                  'o usuário atual antes de reativar este.', 'danger')
+            return redirect(url_for('admin.empresa_detalhe', id=u.id_empresa))
+
+    u.ativo = vai_ativar
     db.session.commit()
     estado = 'ativado' if u.ativo else 'desativado'
     flash(f'Usuário {estado}.', 'success')
@@ -377,8 +411,13 @@ def analise_upload(id):
     _requer_admin()
     analise = db.session.get(Analise, id) or abort(404)
 
-    if analise.status_analise in ('EM_ANALISE', 'CONCLUIDO'):
-        flash('Não é possível fazer upload em análise em processamento ou concluída.', 'warning')
+    if not _empresa_ativa(analise):
+        flash('Não é possível enviar relatórios para empresa que não está ATIVA.', 'warning')
+        return redirect(url_for('admin.analise_detalhe', id=id))
+
+    # Relatório publicado precisa ser despublicado antes de receber novos arquivos.
+    if analise.relatorio and analise.relatorio.publicado:
+        flash('Despublique o relatório antes de enviar novos arquivos.', 'warning')
         return redirect(url_for('admin.analise_detalhe', id=id))
 
     tipo = request.form.get('tipo_relatorio', '').upper()
@@ -450,12 +489,19 @@ def analise_processar(id):
     _requer_admin()
     analise = db.session.get(Analise, id) or abort(404)
 
-    if analise.status_analise == 'CONCLUIDO':
-        flash('Análise publicada. Despublique antes de reprocessar.', 'warning')
+    if not _empresa_ativa(analise):
+        flash('Não é possível processar análise de empresa que não está ATIVA.', 'warning')
         return redirect(url_for('admin.analise_detalhe', id=id))
 
-    if analise.status_analise != 'RELATORIO_RECEBIDO':
-        flash('Análise precisa estar em RELATORIO_RECEBIDO para processar.', 'warning')
+    # Relatório publicado bloqueia (re)processamento até despublicar.
+    if (analise.relatorio and analise.relatorio.publicado) or analise.status_analise == 'CONCLUIDO':
+        flash('Despublique o relatório antes de reprocessar a análise.', 'warning')
+        return redirect(url_for('admin.analise_detalhe', id=id))
+
+    # Processamento inicial em RELATORIO_RECEBIDO; reprocessamento após
+    # despublicação ocorre em EM_ANALISE (a despublicação volta para esse status).
+    if analise.status_analise not in ('RELATORIO_RECEBIDO', 'EM_ANALISE'):
+        flash('Envie os relatórios de VENDAS e COMPRAS antes de processar.', 'warning')
         return redirect(url_for('admin.analise_detalhe', id=id))
 
     upload_vendas = UploadRelatorio.query.filter_by(
@@ -475,9 +521,13 @@ def analise_processar(id):
 
         indicador = IndicadorAnalise.query.filter_by(id_analise=id).first()
         if indicador:
+            # Reprocessamento: incrementa a versão anterior (1:1, sem histórico).
+            nova_versao = (indicador.versao_processamento or 0) + 1
             for k, v in resultado.items():
                 setattr(indicador, k, v)
+            indicador.versao_processamento = nova_versao
         else:
+            # Primeiro processamento: versao_processamento = 1 (vem de resultado).
             indicador = IndicadorAnalise(id_analise=id, **resultado)
             db.session.add(indicador)
 
@@ -519,6 +569,11 @@ def relatorio_editar(id):
         return redirect(url_for('admin.analise_detalhe', id=id))
 
     relatorio = analise.relatorio
+
+    # Relatório publicado é somente leitura: despublicar → editar → republicar.
+    if relatorio and relatorio.publicado:
+        flash('Despublique o relatório antes de editar a devolutiva.', 'warning')
+        return redirect(url_for('admin.analise_detalhe', id=id))
 
     if request.method == 'POST':
         titulo = request.form.get('titulo', '').strip()
@@ -567,8 +622,41 @@ def analise_publicar(id):
     analise = db.session.get(Analise, id) or abort(404)
     relatorio = analise.relatorio
 
+    if not _empresa_ativa(analise):
+        flash('Não é possível publicar entrega para empresa que não está ATIVA.', 'warning')
+        return redirect(url_for('admin.analise_detalhe', id=id))
+
     if not relatorio:
         flash('Crie o relatório estratégico antes de publicar.', 'warning')
+        return redirect(url_for('admin.analise_detalhe', id=id))
+
+    if not (relatorio.titulo or '').strip() or not (relatorio.conclusao_estrategica or '').strip():
+        flash('Preencha título e conclusão estratégica antes de publicar.', 'warning')
+        return redirect(url_for('admin.analise_detalhe', id=id))
+
+    upload_vendas = UploadRelatorio.query.filter_by(
+        id_analise=id, tipo_relatorio='VENDAS').first()
+    upload_compras = UploadRelatorio.query.filter_by(
+        id_analise=id, tipo_relatorio='COMPRAS').first()
+    uploads = [u for u in (upload_vendas, upload_compras) if u]
+
+    if not upload_vendas or not upload_compras:
+        flash('Ambos os relatórios (VENDAS e COMPRAS) são necessários para publicar.', 'danger')
+        return redirect(url_for('admin.analise_detalhe', id=id))
+
+    if any(u.status_processamento in ('PENDENTE', 'ERRO') for u in uploads):
+        flash('Não é possível publicar com relatório pendente ou com erro de processamento.', 'danger')
+        return redirect(url_for('admin.analise_detalhe', id=id))
+
+    indicador = analise.indicadores
+    if not indicador:
+        flash('Não é possível publicar sem KPIs gerados.', 'danger')
+        return redirect(url_for('admin.analise_detalhe', id=id))
+
+    # KPIs precisam ser posteriores ao último upload (evita publicar KPI obsoleto).
+    ultimo_upload = max(u.data_upload for u in uploads)
+    if indicador.data_geracao < ultimo_upload:
+        flash('Reprocesse a análise após o último upload antes de publicar.', 'warning')
         return redirect(url_for('admin.analise_detalhe', id=id))
 
     agora = datetime.utcnow()
@@ -673,6 +761,10 @@ def ticket_mensagem(id):
     )
     db.session.add(mensagem)
     chamado.data_atualizacao = datetime.utcnow()
+    # Resposta do ADMIN marca o ticket como RESPONDIDO.
+    # Ticket RESOLVIDO não é reaberto automaticamente (só por mudança manual de status).
+    if chamado.status_chamado != 'RESOLVIDO':
+        chamado.status_chamado = 'RESPONDIDO'
     db.session.commit()
     flash('Resposta enviada.', 'success')
     return redirect(url_for('admin.ticket_detalhe', id=id))

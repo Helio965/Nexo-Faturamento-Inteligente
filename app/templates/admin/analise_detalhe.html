@@ -76,7 +76,7 @@
                 <span class="badge bg-secondary ms-2">Aguardando</span>
               {% endif %}
             </div>
-            {% if analise.status_analise not in ('EM_ANALISE', 'CONCLUIDO') %}
+            {% if analise.empresa.status_conta == 'ATIVA' and not (analise.relatorio and analise.relatorio.publicado) %}
             <form method="POST" action="{{ url_for('admin.analise_upload', id=analise.id_analise) }}"
                   enctype="multipart/form-data" class="d-flex align-items-center gap-2">
               <input type="hidden" name="tipo_relatorio" value="{{ tipo }}">
@@ -92,11 +92,15 @@
         {% endfor %}
 
         <!-- Botão Processar (POST only) -->
-        {% if analise.status_analise == 'RELATORIO_RECEBIDO' %}
+        {% if analise.empresa.status_conta == 'ATIVA'
+              and not (analise.relatorio and analise.relatorio.publicado)
+              and analise.status_analise in ('RELATORIO_RECEBIDO', 'EM_ANALISE')
+              and upload_vendas and upload_compras %}
         <form method="POST" action="{{ url_for('admin.analise_processar', id=analise.id_analise) }}">
           <button type="submit" class="btn btn-warning fw-semibold"
                   onclick="return confirm('Iniciar processamento dos relatórios?')">
-            <i class="bi bi-play-circle"></i> Processar Agora
+            <i class="bi bi-play-circle"></i>
+            {{ 'Reprocessar' if analise.indicadores else 'Processar Agora' }}
           </button>
         </form>
         {% endif %}
@@ -204,10 +208,11 @@
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
         Relatório Estratégico
-        {% if analise.status_analise in ('EM_ANALISE', 'CONCLUIDO') %}
+        {% if analise.status_analise in ('EM_ANALISE', 'CONCLUIDO')
+              and not (analise.relatorio and analise.relatorio.publicado) %}
         <a href="{{ url_for('admin.relatorio_editar', id=analise.id_analise) }}"
            class="btn btn-sm btn-outline-primary">
-          <i class="bi bi-pencil"></i> {{ 'Editar Rascunho' if not analise.relatorio or not analise.relatorio.publicado else 'Ver / Editar' }}
+          <i class="bi bi-pencil"></i> {{ 'Editar Rascunho' if analise.relatorio else 'Criar Relatório' }}
         </a>
         {% endif %}
       </div>
