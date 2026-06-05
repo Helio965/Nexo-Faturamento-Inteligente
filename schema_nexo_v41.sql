@@ -195,6 +195,8 @@ CREATE TABLE IF NOT EXISTS chamado_suporte (
 
 CREATE INDEX IF NOT EXISTS ix_chamado_id_empresa ON chamado_suporte(id_empresa);
 CREATE INDEX IF NOT EXISTS ix_chamado_id_usuario ON chamado_suporte(id_usuario_cliente_autor);
+CREATE INDEX IF NOT EXISTS idx_chamado_suporte_prioridade_atualizacao
+    ON chamado_suporte (status_chamado, prioridade_atendimento, data_atualizacao);
 
 -- 10. mensagem_suporte
 CREATE TABLE IF NOT EXISTS mensagem_suporte (
