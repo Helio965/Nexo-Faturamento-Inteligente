@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Análise #{{ analise.id }} — NEXO Admin{% endblock %}
+{% block title %}Análise #{{ analise.id_analise }} — NEXO Admin{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-4">
@@ -7,7 +7,7 @@
     <i class="bi bi-arrow-left"></i>
   </a>
   <h4 class="fw-bold mb-0">
-    Análise #{{ analise.id }} — {{ analise.empresa.nome_fantasia }}
+    Análise #{{ analise.id_analise }} — {{ analise.empresa.nome_fantasia }}
   </h4>
   <span class="status-badge
     {% if analise.status_analise == 'CONCLUIDO' %}bg-success
@@ -27,7 +27,7 @@
         <dl class="row mb-0 small">
           <dt class="col-sm-5">Empresa</dt>
           <dd class="col-sm-7">
-            <a href="{{ url_for('admin.empresa_detalhe', id=analise.empresa.id) }}">
+            <a href="{{ url_for('admin.empresa_detalhe', id=analise.empresa.id_empresa) }}">
               {{ analise.empresa.nome_fantasia }}
             </a>
           </dd>
@@ -70,14 +70,14 @@
                 </span>
                 <div class="text-muted small mt-1">
                   {{ upload.nome_arquivo_original }} —
-                  {{ '%.1f' % (upload.tamanho_bytes / 1024) }} KB
+                  {{ '%.1f' % (upload.tamanho_arquivo / 1024) }} KB
                 </div>
               {% else %}
                 <span class="badge bg-secondary ms-2">Aguardando</span>
               {% endif %}
             </div>
             {% if analise.status_analise not in ('EM_ANALISE', 'CONCLUIDO') %}
-            <form method="POST" action="{{ url_for('admin.analise_upload', id=analise.id) }}"
+            <form method="POST" action="{{ url_for('admin.analise_upload', id=analise.id_analise) }}"
                   enctype="multipart/form-data" class="d-flex align-items-center gap-2">
               <input type="hidden" name="tipo_relatorio" value="{{ tipo }}">
               <input type="file" class="form-control form-control-sm" name="arquivo"
@@ -93,7 +93,7 @@
 
         <!-- Botão Processar (POST only) -->
         {% if analise.status_analise == 'RELATORIO_RECEBIDO' %}
-        <form method="POST" action="{{ url_for('admin.analise_processar', id=analise.id) }}">
+        <form method="POST" action="{{ url_for('admin.analise_processar', id=analise.id_analise) }}">
           <button type="submit" class="btn btn-warning fw-semibold"
                   onclick="return confirm('Iniciar processamento dos relatórios?')">
             <i class="bi bi-play-circle"></i> Processar Agora
@@ -205,7 +205,7 @@
       <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
         Relatório Estratégico
         {% if analise.status_analise in ('EM_ANALISE', 'CONCLUIDO') %}
-        <a href="{{ url_for('admin.relatorio_editar', id=analise.id) }}"
+        <a href="{{ url_for('admin.relatorio_editar', id=analise.id_analise) }}"
            class="btn btn-sm btn-outline-primary">
           <i class="bi bi-pencil"></i> {{ 'Editar Rascunho' if not analise.relatorio or not analise.relatorio.publicado else 'Ver / Editar' }}
         </a>
@@ -224,7 +224,7 @@
           </div>
           <div class="d-flex gap-2">
             {% if not r.publicado and analise.status_analise == 'EM_ANALISE' %}
-            <form method="POST" action="{{ url_for('admin.analise_publicar', id=analise.id) }}">
+            <form method="POST" action="{{ url_for('admin.analise_publicar', id=analise.id_analise) }}">
               <button type="submit" class="btn btn-success btn-sm"
                       onclick="return confirm('Publicar e tornar visível para o cliente?')">
                 <i class="bi bi-send-check"></i> Publicar
@@ -232,7 +232,7 @@
             </form>
             {% endif %}
             {% if r.publicado %}
-            <form method="POST" action="{{ url_for('admin.analise_despublicar', id=analise.id) }}">
+            <form method="POST" action="{{ url_for('admin.analise_despublicar', id=analise.id_analise) }}">
               <button type="submit" class="btn btn-outline-warning btn-sm"
                       onclick="return confirm('Despublicar? A análise voltará para EM_ANALISE.')">
                 <i class="bi bi-arrow-counterclockwise"></i> Despublicar
@@ -244,7 +244,7 @@
           <p class="text-muted mb-0">
             {% if analise.status_analise in ('EM_ANALISE', 'CONCLUIDO') %}
             Nenhum relatório redigido ainda.
-            <a href="{{ url_for('admin.relatorio_editar', id=analise.id) }}">Criar agora.</a>
+            <a href="{{ url_for('admin.relatorio_editar', id=analise.id_analise) }}">Criar agora.</a>
             {% else %}
             Processe os relatórios de PDV antes de redigir.
             {% endif %}

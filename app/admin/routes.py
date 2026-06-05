@@ -1,5 +1,6 @@
 import os
-from datetime import datetime
+from datetime import datetime, date
+from calendar import monthrange
 from flask import (Blueprint, render_template, redirect, url_for, flash,
                    request, abort, current_app)
 from flask_login import login_required, current_user
@@ -22,6 +23,21 @@ def _requer_admin():
         abort(403)
 
 
+def _periodo_analise(mes, ano, tipo, quinzena):
+    """Calcula periodo_inicio e periodo_fim conforme tipo e quinzena."""
+    if tipo == 'QUINZENAL':
+        if quinzena == 1:
+            inicio = date(ano, mes, 1)
+            fim = date(ano, mes, 15)
+        else:
+            inicio = date(ano, mes, 16)
+            fim = date(ano, mes, monthrange(ano, mes)[1])
+    else:
+        inicio = date(ano, mes, 1)
+        fim = date(ano, mes, monthrange(ano, mes)[1])
+    return inicio, fim
+
+
 # ---------- Dashboard --------------------------------------------------------
 
 @admin_bp.route('/')
@@ -41,7 +57,7 @@ def dashboard():
                          .order_by(Analise.data_criacao.desc())
                          .limit(5).all())
     tickets_recentes = (ChamadoSuporte.query
-                        .order_by(ChamadoSuporte.data_criacao.desc())
+                        .order_by(ChamadoSuporte.data_abertura.desc())
                         .limit(5).all())
 
     return render_template('admin/dashboard.html',
@@ -68,34 +84,47 @@ def empresas():
 def empresa_nova():
     _requer_admin()
     planos = Plano.query.filter_by(ativo=True).all()
-    segmentos = Segmento.query.order_by(Segmento.nome_segmento).all()
+    segmentos = Segmento.query.filter_by(ativo=True).order_by(Segmento.nome_segmento).all()
 
     if request.method == 'POST':
         nome_fantasia = request.form.get('nome_fantasia', '').strip()
-        razao_social = request.form.get('razao_social', '').strip()
+        razao_social = request.form.get('razao_social', '').strip() or None
         cnpj = request.form.get('cnpj', '').strip() or None
         email_contato = request.form.get('email_contato', '').strip() or None
+        telefone_contato = request.form.get('telefone_contato', '').strip() or None
         id_plano = request.form.get('id_plano_atual')
         id_segmento = request.form.get('id_segmento') or None
+        fat_base = request.form.get('faturamento_base_mensal', '').strip() or None
+        data_contratacao_str = request.form.get('data_contratacao', '').strip() or None
 
         if not nome_fantasia or not id_plano:
             flash('Nome fantasia e plano são obrigatórios.', 'danger')
             return render_template('admin/empresa_form.html', planos=planos,
                                    segmentos=segmentos, empresa=None)
 
+        data_contratacao = None
+        if data_contratacao_str:
+            try:
+                data_contratacao = datetime.strptime(data_contratacao_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
         empresa = Empresa(
             nome_fantasia=nome_fantasia,
-            razao_social=razao_social or None,
+            razao_social=razao_social,
             cnpj=cnpj,
             email_contato=email_contato,
+            telefone_contato=telefone_contato,
             id_plano_atual=int(id_plano),
             id_segmento=int(id_segmento) if id_segmento else None,
+            faturamento_base_mensal=float(fat_base) if fat_base else None,
+            data_contratacao=data_contratacao,
             status_conta='ATIVA',
         )
         db.session.add(empresa)
         db.session.commit()
         flash(f'Empresa "{empresa.nome_fantasia}" criada com sucesso.', 'success')
-        return redirect(url_for('admin.empresa_detalhe', id=empresa.id))
+        return redirect(url_for('admin.empresa_detalhe', id=empresa.id_empresa))
 
     return render_template('admin/empresa_form.html', planos=planos,
                            segmentos=segmentos, empresa=None)
@@ -105,7 +134,7 @@ def empresa_nova():
 @login_required
 def empresa_detalhe(id):
     _requer_admin()
-    empresa = Empresa.query.get_or_404(id)
+    empresa = db.session.get(Empresa, id) or abort(404)
     usuarios = empresa.usuarios.all()
     analises = (empresa.analises
                 .order_by(Analise.ano_referencia.desc(), Analise.mes_referencia.desc())
@@ -118,23 +147,32 @@ def empresa_detalhe(id):
 @login_required
 def empresa_editar(id):
     _requer_admin()
-    empresa = Empresa.query.get_or_404(id)
+    empresa = db.session.get(Empresa, id) or abort(404)
     planos = Plano.query.filter_by(ativo=True).all()
-    segmentos = Segmento.query.order_by(Segmento.nome_segmento).all()
+    segmentos = Segmento.query.filter_by(ativo=True).order_by(Segmento.nome_segmento).all()
 
     if request.method == 'POST':
         empresa.nome_fantasia = request.form.get('nome_fantasia', '').strip()
         empresa.razao_social = request.form.get('razao_social', '').strip() or None
         empresa.cnpj = request.form.get('cnpj', '').strip() or None
         empresa.email_contato = request.form.get('email_contato', '').strip() or None
+        empresa.telefone_contato = request.form.get('telefone_contato', '').strip() or None
         empresa.id_plano_atual = int(request.form.get('id_plano_atual'))
         id_seg = request.form.get('id_segmento')
         empresa.id_segmento = int(id_seg) if id_seg else None
         empresa.status_conta = request.form.get('status_conta', 'ATIVA')
+        fat_base = request.form.get('faturamento_base_mensal', '').strip()
+        empresa.faturamento_base_mensal = float(fat_base) if fat_base else None
+        data_contratacao_str = request.form.get('data_contratacao', '').strip()
+        if data_contratacao_str:
+            try:
+                empresa.data_contratacao = datetime.strptime(data_contratacao_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
 
         db.session.commit()
         flash('Empresa atualizada.', 'success')
-        return redirect(url_for('admin.empresa_detalhe', id=empresa.id))
+        return redirect(url_for('admin.empresa_detalhe', id=empresa.id_empresa))
 
     return render_template('admin/empresa_form.html', planos=planos,
                            segmentos=segmentos, empresa=empresa)
@@ -146,7 +184,7 @@ def empresa_editar(id):
 @login_required
 def usuario_novo(id_empresa):
     _requer_admin()
-    empresa = Empresa.query.get_or_404(id_empresa)
+    empresa = db.session.get(Empresa, id_empresa) or abort(404)
 
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip()
@@ -161,12 +199,13 @@ def usuario_novo(id_empresa):
             flash('E-mail já cadastrado.', 'danger')
             return render_template('admin/usuario_form.html', empresa=empresa)
 
-        u = Usuario(nome=nome, email=email, role='CLIENTE', id_empresa=empresa.id)
+        u = Usuario(nome=nome, email=email, role='CLIENTE',
+                    id_empresa=empresa.id_empresa)
         u.set_password(senha)
         db.session.add(u)
         db.session.commit()
         flash(f'Usuário "{u.nome}" criado.', 'success')
-        return redirect(url_for('admin.empresa_detalhe', id=empresa.id))
+        return redirect(url_for('admin.empresa_detalhe', id=empresa.id_empresa))
 
     return render_template('admin/usuario_form.html', empresa=empresa)
 
@@ -175,7 +214,7 @@ def usuario_novo(id_empresa):
 @login_required
 def usuario_toggle(id):
     _requer_admin()
-    u = Usuario.query.get_or_404(id)
+    u = db.session.get(Usuario, id) or abort(404)
     if u.is_admin:
         flash('Não é possível desativar um administrador por aqui.', 'warning')
         return redirect(url_for('admin.dashboard'))
@@ -192,9 +231,7 @@ def usuario_toggle(id):
 @login_required
 def analises():
     _requer_admin()
-    lista = (Analise.query
-             .order_by(Analise.data_criacao.desc())
-             .all())
+    lista = (Analise.query.order_by(Analise.data_criacao.desc()).all())
     return render_template('admin/analises.html', analises=lista)
 
 
@@ -202,7 +239,8 @@ def analises():
 @login_required
 def analise_nova():
     _requer_admin()
-    empresas_ativas = Empresa.query.filter_by(status_conta='ATIVA').order_by(Empresa.nome_fantasia).all()
+    empresas_ativas = (Empresa.query.filter_by(status_conta='ATIVA')
+                       .order_by(Empresa.nome_fantasia).all())
 
     if request.method == 'POST':
         id_empresa = request.form.get('id_empresa')
@@ -216,7 +254,7 @@ def analise_nova():
             return render_template('admin/analise_form.html', empresas=empresas_ativas,
                                    now=datetime.utcnow())
 
-        empresa = Empresa.query.get_or_404(int(id_empresa))
+        empresa = db.session.get(Empresa, int(id_empresa)) or abort(404)
 
         if empresa.status_conta != 'ATIVA':
             flash('Empresa precisa estar ATIVA para receber análise.', 'danger')
@@ -228,22 +266,27 @@ def analise_nova():
             return render_template('admin/analise_form.html', empresas=empresas_ativas,
                                    now=datetime.utcnow())
 
+        mes_i = int(mes)
+        ano_i = int(ano)
         quinzena_int = int(quinzena) if quinzena and tipo_analise == 'QUINZENAL' else None
+        p_inicio, p_fim = _periodo_analise(mes_i, ano_i, tipo_analise, quinzena_int)
 
         analise = Analise(
-            id_empresa=empresa.id,
+            id_empresa=empresa.id_empresa,
             id_plano_referencia=empresa.id_plano_atual,
-            id_usuario_admin_responsavel=current_user.id,
+            id_usuario_admin_responsavel=current_user.id_usuario,
             tipo_analise=tipo_analise,
-            mes_referencia=int(mes),
-            ano_referencia=int(ano),
+            mes_referencia=mes_i,
+            ano_referencia=ano_i,
             quinzena_referencia=quinzena_int,
+            periodo_inicio=p_inicio,
+            periodo_fim=p_fim,
             status_analise='AGUARDANDO_RELATORIO',
         )
         db.session.add(analise)
         db.session.commit()
         flash('Análise criada. Faça o upload dos relatórios.', 'success')
-        return redirect(url_for('admin.analise_detalhe', id=analise.id))
+        return redirect(url_for('admin.analise_detalhe', id=analise.id_analise))
 
     return render_template('admin/analise_form.html', empresas=empresas_ativas,
                            now=datetime.utcnow())
@@ -253,7 +296,7 @@ def analise_nova():
 @login_required
 def analise_detalhe(id):
     _requer_admin()
-    analise = Analise.query.get_or_404(id)
+    analise = db.session.get(Analise, id) or abort(404)
     upload_vendas = UploadRelatorio.query.filter_by(
         id_analise=id, tipo_relatorio='VENDAS').first()
     upload_compras = UploadRelatorio.query.filter_by(
@@ -268,7 +311,7 @@ def analise_detalhe(id):
 @login_required
 def analise_upload(id):
     _requer_admin()
-    analise = Analise.query.get_or_404(id)
+    analise = db.session.get(Analise, id) or abort(404)
 
     if analise.status_analise in ('EM_ANALISE', 'CONCLUIDO'):
         flash('Não é possível fazer upload em análise em processamento ou concluída.', 'warning')
@@ -292,7 +335,7 @@ def analise_upload(id):
 
     ext_upper = ext.upper()
 
-    # Substituir upload anterior do mesmo tipo
+    # Re-upload: remove anterior
     upload_existente = UploadRelatorio.query.filter_by(
         id_analise=id, tipo_relatorio=tipo).first()
     if upload_existente:
@@ -309,22 +352,22 @@ def analise_upload(id):
     arquivo.save(caminho)
 
     tamanho = os.path.getsize(caminho)
-    hash_sha = sha256_arquivo(caminho)
+    hash_arq = sha256_arquivo(caminho)
 
     upload = UploadRelatorio(
         id_analise=id,
-        id_usuario_admin=current_user.id,
+        id_usuario_admin=current_user.id_usuario,
         tipo_relatorio=tipo,
         nome_arquivo_original=nome_original,
         extensao_arquivo=ext_upper,
         caminho_arquivo=caminho,
-        tamanho_bytes=tamanho,
-        hash_sha256=hash_sha,
+        tamanho_arquivo=tamanho,
+        hash_arquivo=hash_arq,
         status_processamento='PENDENTE',
     )
     db.session.add(upload)
 
-    # Verifica se ambos os uploads existem → muda para RELATORIO_RECEBIDO
+    # Ambos os uploads presentes → RELATORIO_RECEBIDO
     outro_tipo = 'COMPRAS' if tipo == 'VENDAS' else 'VENDAS'
     outro_upload = UploadRelatorio.query.filter_by(
         id_analise=id, tipo_relatorio=outro_tipo).first()
@@ -341,7 +384,7 @@ def analise_upload(id):
 def analise_processar(id):
     """Processamento exclusivamente via POST. Nunca via GET."""
     _requer_admin()
-    analise = Analise.query.get_or_404(id)
+    analise = db.session.get(Analise, id) or abort(404)
 
     if analise.status_analise == 'CONCLUIDO':
         flash('Análise publicada. Despublique antes de reprocessar.', 'warning')
@@ -374,15 +417,25 @@ def analise_processar(id):
             indicador = IndicadorAnalise(id_analise=id, **resultado)
             db.session.add(indicador)
 
+        agora = datetime.utcnow()
         upload_vendas.status_processamento = 'PROCESSADO'
+        upload_vendas.data_processamento = agora
+        upload_vendas.mensagem_erro = None
         upload_compras.status_processamento = 'PROCESSADO'
+        upload_compras.data_processamento = agora
+        upload_compras.mensagem_erro = None
         db.session.commit()
         flash('Processamento concluído. KPIs gerados.', 'success')
     except Exception as exc:
         db.session.rollback()
+        agora = datetime.utcnow()
         analise.status_analise = 'RELATORIO_RECEBIDO'
         upload_vendas.status_processamento = 'ERRO'
+        upload_vendas.data_processamento = agora
+        upload_vendas.mensagem_erro = str(exc)[:500]
         upload_compras.status_processamento = 'ERRO'
+        upload_compras.data_processamento = agora
+        upload_compras.mensagem_erro = str(exc)[:500]
         db.session.commit()
         flash(f'Erro no processamento: {exc}', 'danger')
 
@@ -395,7 +448,7 @@ def analise_processar(id):
 @login_required
 def relatorio_editar(id):
     _requer_admin()
-    analise = Analise.query.get_or_404(id)
+    analise = db.session.get(Analise, id) or abort(404)
 
     if analise.status_analise not in ('EM_ANALISE', 'CONCLUIDO'):
         flash('A análise precisa ser processada antes de redigir o relatório.', 'warning')
@@ -412,6 +465,7 @@ def relatorio_editar(id):
             return render_template('admin/relatorio_form.html',
                                    analise=analise, relatorio=relatorio)
 
+        agora = datetime.utcnow()
         if relatorio:
             relatorio.titulo = titulo
             relatorio.resumo_executivo = request.form.get('resumo_executivo', '').strip() or None
@@ -419,11 +473,11 @@ def relatorio_editar(id):
             relatorio.pontos_de_alerta = request.form.get('pontos_de_alerta', '').strip() or None
             relatorio.recomendacoes = request.form.get('recomendacoes', '').strip() or None
             relatorio.conclusao_estrategica = conclusao
-            relatorio.data_atualizacao = datetime.utcnow()
+            relatorio.data_atualizacao = agora
         else:
             relatorio = RelatorioAnalise(
                 id_analise=id,
-                id_usuario_admin_autor=current_user.id,
+                id_usuario_admin_autor=current_user.id_usuario,
                 titulo=titulo,
                 resumo_executivo=request.form.get('resumo_executivo', '').strip() or None,
                 pontos_positivos=request.form.get('pontos_positivos', '').strip() or None,
@@ -446,17 +500,18 @@ def relatorio_editar(id):
 @login_required
 def analise_publicar(id):
     _requer_admin()
-    analise = Analise.query.get_or_404(id)
+    analise = db.session.get(Analise, id) or abort(404)
     relatorio = analise.relatorio
 
     if not relatorio:
         flash('Crie o relatório estratégico antes de publicar.', 'warning')
         return redirect(url_for('admin.analise_detalhe', id=id))
 
+    agora = datetime.utcnow()
     relatorio.publicado = True
-    relatorio.data_publicacao = datetime.utcnow()
+    relatorio.data_publicacao = agora
     analise.status_analise = 'CONCLUIDO'
-    analise.data_conclusao = datetime.utcnow()
+    analise.data_conclusao = agora
     db.session.commit()
     flash('Análise publicada para o cliente.', 'success')
     return redirect(url_for('admin.analise_detalhe', id=id))
@@ -466,7 +521,7 @@ def analise_publicar(id):
 @login_required
 def analise_despublicar(id):
     _requer_admin()
-    analise = Analise.query.get_or_404(id)
+    analise = db.session.get(Analise, id) or abort(404)
     relatorio = analise.relatorio
 
     if relatorio:
@@ -489,7 +544,7 @@ def tickets():
     aba = request.args.get('aba', 'ativos')
     busca = request.args.get('q', '').strip()
 
-    # Ordenação explícita por prioridade: ALTA > MEDIA > BAIXA
+    # Ordenação explícita ALTA > MEDIA > BAIXA
     ordem_prioridade = case(
         (ChamadoSuporte.prioridade_atendimento == 'ALTA', 1),
         (ChamadoSuporte.prioridade_atendimento == 'MEDIA', 2),
@@ -512,7 +567,7 @@ def tickets():
     else:
         query = query.filter(ChamadoSuporte.status_chamado != 'RESOLVIDO')
 
-    tickets_lista = query.order_by(ordem_prioridade, ChamadoSuporte.data_criacao).all()
+    tickets_lista = query.order_by(ordem_prioridade, ChamadoSuporte.data_abertura).all()
 
     return render_template('admin/tickets.html',
                            tickets=tickets_lista, aba=aba, busca=busca)
@@ -522,7 +577,7 @@ def tickets():
 @login_required
 def ticket_detalhe(id):
     _requer_admin()
-    chamado = ChamadoSuporte.query.get_or_404(id)
+    chamado = db.session.get(ChamadoSuporte, id) or abort(404)
     mensagens = chamado.mensagens.all()
     return render_template('admin/ticket_detalhe.html',
                            chamado=chamado, mensagens=mensagens)
@@ -532,7 +587,7 @@ def ticket_detalhe(id):
 @login_required
 def ticket_mensagem(id):
     _requer_admin()
-    chamado = ChamadoSuporte.query.get_or_404(id)
+    chamado = db.session.get(ChamadoSuporte, id) or abort(404)
     conteudo = request.form.get('conteudo', '').strip()
 
     if not conteudo:
@@ -541,7 +596,7 @@ def ticket_mensagem(id):
 
     mensagem = MensagemSuporte(
         id_chamado=id,
-        id_usuario_autor=current_user.id,
+        id_usuario_autor=current_user.id_usuario,
         conteudo=conteudo,
     )
     db.session.add(mensagem)
@@ -555,7 +610,7 @@ def ticket_mensagem(id):
 @login_required
 def ticket_status(id):
     _requer_admin()
-    chamado = ChamadoSuporte.query.get_or_404(id)
+    chamado = db.session.get(ChamadoSuporte, id) or abort(404)
     novo_status = request.form.get('status_chamado', '').upper()
 
     STATUS_VALIDOS = ('ABERTO', 'EM_ANDAMENTO', 'RESPONDIDO', 'RESOLVIDO')
@@ -564,7 +619,13 @@ def ticket_status(id):
         return redirect(url_for('admin.ticket_detalhe', id=id))
 
     chamado.status_chamado = novo_status
-    chamado.data_atualizacao = datetime.utcnow()
+    agora = datetime.utcnow()
+    chamado.data_atualizacao = agora
+    if novo_status == 'RESOLVIDO':
+        chamado.data_fechamento = agora
+    else:
+        chamado.data_fechamento = None  # Reabertura limpa data_fechamento
+
     db.session.commit()
     flash(f'Status atualizado para {novo_status}.', 'success')
     return redirect(url_for('admin.ticket_detalhe', id=id))

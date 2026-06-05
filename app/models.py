@@ -8,19 +8,36 @@ from app import db
 class Plano(db.Model):
     __tablename__ = 'plano'
 
-    id = db.Column(db.Integer, primary_key=True)
-    nome_plano = db.Column(db.String(50), nullable=False, unique=True)  # BRONZE, PRATA, OURO
+    id_plano = db.Column(db.Integer, primary_key=True)
+    nome_plano = db.Column(db.String(50), nullable=False, unique=True)
     descricao = db.Column(db.Text)
+    valor_mensal = db.Column(db.Numeric(10, 2))
+    qtd_analises_mes = db.Column(db.Integer)
+    tipo_analise_permitida = db.Column(db.String(20))   # MENSAL, QUINZENAL
+    nivel_entrega_analise = db.Column(db.String(20))    # BASICA, COMPLETA, PREMIUM
+    nivel_dashboard = db.Column(db.String(20))           # RESUMIDO, GERENCIAL, COMPLETO
     nivel_atendimento = db.Column(db.String(10), nullable=False)  # BAIXO, MEDIO, ALTO
     ativo = db.Column(db.Boolean, default=True, nullable=False)
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow,
+                                 onupdate=datetime.utcnow, nullable=False)
 
     empresas = db.relationship('Empresa', back_populates='plano_atual', lazy='dynamic')
     analises = db.relationship('Analise', foreign_keys='Analise.id_plano_referencia',
                                back_populates='plano_referencia', lazy='dynamic')
 
     __table_args__ = (
-        CheckConstraint("nome_plano IN ('BRONZE', 'PRATA', 'OURO')", name='ck_plano_nome'),
-        CheckConstraint("nivel_atendimento IN ('BAIXO', 'MEDIO', 'ALTO')", name='ck_plano_nivel'),
+        CheckConstraint("nome_plano IN ('BRONZE','PRATA','OURO')", name='ck_plano_nome'),
+        CheckConstraint("nivel_atendimento IN ('BAIXO','MEDIO','ALTO')", name='ck_plano_nivel'),
+        CheckConstraint(
+            "tipo_analise_permitida IS NULL OR tipo_analise_permitida IN ('MENSAL','QUINZENAL')",
+            name='ck_plano_tipo_analise'),
+        CheckConstraint(
+            "nivel_entrega_analise IS NULL OR nivel_entrega_analise IN ('BASICA','COMPLETA','PREMIUM')",
+            name='ck_plano_nivel_entrega'),
+        CheckConstraint(
+            "nivel_dashboard IS NULL OR nivel_dashboard IN ('RESUMIDO','GERENCIAL','COMPLETO')",
+            name='ck_plano_nivel_dashboard'),
     )
 
     @property
@@ -32,9 +49,13 @@ class Plano(db.Model):
 class Segmento(db.Model):
     __tablename__ = 'segmento'
 
-    id = db.Column(db.Integer, primary_key=True)
+    id_segmento = db.Column(db.Integer, primary_key=True)
     nome_segmento = db.Column(db.String(100), nullable=False, unique=True)
     descricao = db.Column(db.Text)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow,
+                                 onupdate=datetime.utcnow, nullable=False)
 
     empresas = db.relationship('Empresa', back_populates='segmento', lazy='dynamic')
 
@@ -42,15 +63,20 @@ class Segmento(db.Model):
 class Empresa(db.Model):
     __tablename__ = 'empresa'
 
-    id = db.Column(db.Integer, primary_key=True)
-    id_segmento = db.Column(db.Integer, db.ForeignKey('segmento.id'), nullable=True)
-    id_plano_atual = db.Column(db.Integer, db.ForeignKey('plano.id'), nullable=False)
-    nome_fantasia = db.Column(db.String(200), nullable=False)
-    razao_social = db.Column(db.String(200))
+    id_empresa = db.Column(db.Integer, primary_key=True)
+    id_segmento = db.Column(db.Integer, db.ForeignKey('segmento.id_segmento'), nullable=True)
+    id_plano_atual = db.Column(db.Integer, db.ForeignKey('plano.id_plano'), nullable=False)
     cnpj = db.Column(db.String(18), unique=True)
+    razao_social = db.Column(db.String(200))
+    nome_fantasia = db.Column(db.String(200), nullable=False)
     email_contato = db.Column(db.String(200))
+    telefone_contato = db.Column(db.String(20))
+    data_contratacao = db.Column(db.Date)
+    faturamento_base_mensal = db.Column(db.Numeric(15, 2))
     status_conta = db.Column(db.String(20), nullable=False, default='ATIVA')
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow,
+                                 onupdate=datetime.utcnow, nullable=False)
 
     segmento = db.relationship('Segmento', back_populates='empresas')
     plano_atual = db.relationship('Plano', back_populates='empresas')
@@ -59,7 +85,8 @@ class Empresa(db.Model):
     chamados = db.relationship('ChamadoSuporte', back_populates='empresa', lazy='dynamic')
 
     __table_args__ = (
-        CheckConstraint("status_conta IN ('ATIVA', 'SUSPENSA', 'CANCELADA')", name='ck_empresa_status'),
+        CheckConstraint("status_conta IN ('ATIVA','SUSPENSA','CANCELADA')",
+                        name='ck_empresa_status'),
         Index('ix_empresa_id_segmento', 'id_segmento'),
         Index('ix_empresa_id_plano_atual', 'id_plano_atual'),
     )
@@ -68,14 +95,17 @@ class Empresa(db.Model):
 class Usuario(UserMixin, db.Model):
     __tablename__ = 'usuario'
 
-    id = db.Column(db.Integer, primary_key=True)
-    id_empresa = db.Column(db.Integer, db.ForeignKey('empresa.id'), nullable=True)
+    id_usuario = db.Column(db.Integer, primary_key=True)
+    id_empresa = db.Column(db.Integer, db.ForeignKey('empresa.id_empresa'), nullable=True)
     nome = db.Column(db.String(200), nullable=False)
     email = db.Column(db.String(200), nullable=False, unique=True)
     senha_hash = db.Column(db.String(512), nullable=False)
-    role = db.Column(db.String(10), nullable=False)  # ADMIN ou CLIENTE
+    role = db.Column(db.String(10), nullable=False)  # ADMIN, CLIENTE
     ativo = db.Column(db.Boolean, default=True, nullable=False)
+    ultimo_acesso = db.Column(db.DateTime, nullable=True)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow,
+                                 onupdate=datetime.utcnow, nullable=False)
 
     empresa = db.relationship('Empresa', back_populates='usuarios')
     analises_responsavel = db.relationship(
@@ -95,13 +125,16 @@ class Usuario(UserMixin, db.Model):
         back_populates='autor', lazy='dynamic')
 
     __table_args__ = (
-        CheckConstraint("role IN ('ADMIN', 'CLIENTE')", name='ck_usuario_role'),
+        CheckConstraint("role IN ('ADMIN','CLIENTE')", name='ck_usuario_role'),
         CheckConstraint(
             "(role = 'ADMIN' AND id_empresa IS NULL) OR (role = 'CLIENTE' AND id_empresa IS NOT NULL)",
-            name='ck_usuario_role_empresa'
-        ),
+            name='ck_usuario_role_empresa'),
         Index('ix_usuario_id_empresa', 'id_empresa'),
     )
+
+    # Flask-Login exige get_id(); retorna id_usuario como str
+    def get_id(self):
+        return str(self.id_usuario)
 
     def set_password(self, password):
         self.senha_hash = generate_password_hash(password)
@@ -121,16 +154,21 @@ class Usuario(UserMixin, db.Model):
 class Analise(db.Model):
     __tablename__ = 'analise'
 
-    id = db.Column(db.Integer, primary_key=True)
-    id_empresa = db.Column(db.Integer, db.ForeignKey('empresa.id'), nullable=False)
-    id_plano_referencia = db.Column(db.Integer, db.ForeignKey('plano.id'), nullable=False)
-    id_usuario_admin_responsavel = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
-    tipo_analise = db.Column(db.String(20), nullable=False)  # MENSAL, QUINZENAL
+    id_analise = db.Column(db.Integer, primary_key=True)
+    id_empresa = db.Column(db.Integer, db.ForeignKey('empresa.id_empresa'), nullable=False)
+    id_plano_referencia = db.Column(db.Integer, db.ForeignKey('plano.id_plano'), nullable=False)
+    id_usuario_admin_responsavel = db.Column(db.Integer, db.ForeignKey('usuario.id_usuario'),
+                                             nullable=False)
+    periodo_inicio = db.Column(db.Date, nullable=True)
+    periodo_fim = db.Column(db.Date, nullable=True)
     mes_referencia = db.Column(db.Integer, nullable=False)
     ano_referencia = db.Column(db.Integer, nullable=False)
+    tipo_analise = db.Column(db.String(20), nullable=False)   # MENSAL, QUINZENAL
     quinzena_referencia = db.Column(db.Integer, nullable=True)  # NULL, 1 ou 2
     status_analise = db.Column(db.String(30), nullable=False, default='AGUARDANDO_RELATORIO')
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow,
+                                 onupdate=datetime.utcnow, nullable=False)
     data_conclusao = db.Column(db.DateTime, nullable=True)
 
     empresa = db.relationship('Empresa', back_populates='analises')
@@ -147,7 +185,7 @@ class Analise(db.Model):
         CheckConstraint(
             "status_analise IN ('AGUARDANDO_RELATORIO','RELATORIO_RECEBIDO','EM_ANALISE','CONCLUIDO')",
             name='ck_analise_status'),
-        CheckConstraint("tipo_analise IN ('MENSAL', 'QUINZENAL')", name='ck_analise_tipo'),
+        CheckConstraint("tipo_analise IN ('MENSAL','QUINZENAL')", name='ck_analise_tipo'),
         CheckConstraint(
             "(tipo_analise = 'MENSAL' AND quinzena_referencia IS NULL) OR "
             "(tipo_analise = 'QUINZENAL' AND quinzena_referencia IN (1, 2))",
@@ -170,17 +208,19 @@ class Analise(db.Model):
 class UploadRelatorio(db.Model):
     __tablename__ = 'upload_relatorio'
 
-    id = db.Column(db.Integer, primary_key=True)
-    id_analise = db.Column(db.Integer, db.ForeignKey('analise.id'), nullable=False)
-    id_usuario_admin = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
-    tipo_relatorio = db.Column(db.String(10), nullable=False)  # VENDAS, COMPRAS
+    id_upload = db.Column(db.Integer, primary_key=True)
+    id_analise = db.Column(db.Integer, db.ForeignKey('analise.id_analise'), nullable=False)
+    id_usuario_admin = db.Column(db.Integer, db.ForeignKey('usuario.id_usuario'), nullable=False)
+    tipo_relatorio = db.Column(db.String(10), nullable=False)   # VENDAS, COMPRAS
     nome_arquivo_original = db.Column(db.String(500), nullable=False)
-    extensao_arquivo = db.Column(db.String(5), nullable=False)  # CSV, XLSX, XLS
     caminho_arquivo = db.Column(db.String(500), nullable=False)
-    tamanho_bytes = db.Column(db.Integer)
-    hash_sha256 = db.Column(db.String(64))
-    status_processamento = db.Column(db.String(15), nullable=False, default='PENDENTE')
+    extensao_arquivo = db.Column(db.String(5), nullable=False)  # CSV, XLSX, XLS
+    tamanho_arquivo = db.Column(db.Integer)
+    hash_arquivo = db.Column(db.String(64))
     data_upload = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    status_processamento = db.Column(db.String(15), nullable=False, default='PENDENTE')
+    data_processamento = db.Column(db.DateTime, nullable=True)
+    mensagem_erro = db.Column(db.Text, nullable=True)
 
     analise = db.relationship('Analise', back_populates='uploads')
     admin_upload = db.relationship('Usuario', foreign_keys=[id_usuario_admin],
@@ -188,11 +228,10 @@ class UploadRelatorio(db.Model):
 
     __table_args__ = (
         UniqueConstraint('id_analise', 'tipo_relatorio', name='uq_upload_analise_tipo'),
-        CheckConstraint("tipo_relatorio IN ('VENDAS', 'COMPRAS')", name='ck_upload_tipo'),
-        CheckConstraint("extensao_arquivo IN ('CSV', 'XLSX', 'XLS')", name='ck_upload_extensao'),
-        CheckConstraint(
-            "status_processamento IN ('PENDENTE', 'PROCESSADO', 'ERRO')",
-            name='ck_upload_status'),
+        CheckConstraint("tipo_relatorio IN ('VENDAS','COMPRAS')", name='ck_upload_tipo'),
+        CheckConstraint("extensao_arquivo IN ('CSV','XLSX','XLS')", name='ck_upload_extensao'),
+        CheckConstraint("status_processamento IN ('PENDENTE','PROCESSADO','ERRO')",
+                        name='ck_upload_status'),
         Index('ix_upload_id_analise', 'id_analise'),
         Index('ix_upload_id_usuario', 'id_usuario_admin'),
     )
@@ -201,11 +240,12 @@ class UploadRelatorio(db.Model):
 class IndicadorAnalise(db.Model):
     __tablename__ = 'indicador_analise'
 
-    id = db.Column(db.Integer, primary_key=True)
-    id_analise = db.Column(db.Integer, db.ForeignKey('analise.id'), nullable=False, unique=True)
+    id_indicador = db.Column(db.Integer, primary_key=True)
+    id_analise = db.Column(db.Integer, db.ForeignKey('analise.id_analise'),
+                           nullable=False, unique=True)
     faturamento_total = db.Column(db.Numeric(15, 2))
     total_comprado = db.Column(db.Numeric(15, 2))
-    # NULL quando não há custo/valor confiável por produto
+    # NULL quando não há custo confiável por produto
     saldo_estimado_compras_vendas = db.Column(db.Numeric(15, 2), nullable=True)
     produto_mais_vendido_nome = db.Column(db.String(500))
     produto_mais_vendido_quantidade = db.Column(db.Numeric(15, 3))
@@ -227,9 +267,11 @@ class IndicadorAnalise(db.Model):
 class RelatorioAnalise(db.Model):
     __tablename__ = 'relatorio_analise'
 
-    id = db.Column(db.Integer, primary_key=True)
-    id_analise = db.Column(db.Integer, db.ForeignKey('analise.id'), nullable=False, unique=True)
-    id_usuario_admin_autor = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    id_relatorio = db.Column(db.Integer, primary_key=True)
+    id_analise = db.Column(db.Integer, db.ForeignKey('analise.id_analise'),
+                           nullable=False, unique=True)
+    id_usuario_admin_autor = db.Column(db.Integer, db.ForeignKey('usuario.id_usuario'),
+                                       nullable=False)
     titulo = db.Column(db.String(300), nullable=False)
     resumo_executivo = db.Column(db.Text)
     pontos_positivos = db.Column(db.Text)
@@ -255,21 +297,24 @@ class RelatorioAnalise(db.Model):
 class ChamadoSuporte(db.Model):
     __tablename__ = 'chamado_suporte'
 
-    id = db.Column(db.Integer, primary_key=True)
-    id_empresa = db.Column(db.Integer, db.ForeignKey('empresa.id'), nullable=False)
-    id_usuario_cliente_autor = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    id_chamado = db.Column(db.Integer, primary_key=True)
+    id_empresa = db.Column(db.Integer, db.ForeignKey('empresa.id_empresa'), nullable=False)
+    id_usuario_cliente_autor = db.Column(db.Integer, db.ForeignKey('usuario.id_usuario'),
+                                         nullable=False)
     assunto = db.Column(db.String(300), nullable=False)
-    prioridade_atendimento = db.Column(db.String(10), nullable=False)  # BAIXA, MEDIA, ALTA
+    descricao = db.Column(db.Text, nullable=False)
     status_chamado = db.Column(db.String(15), nullable=False, default='ABERTO')
-    data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    prioridade_atendimento = db.Column(db.String(10), nullable=False)  # BAIXA, MEDIA, ALTA
+    data_abertura = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow,
                                  onupdate=datetime.utcnow, nullable=False)
+    data_fechamento = db.Column(db.DateTime, nullable=True)
 
     empresa = db.relationship('Empresa', back_populates='chamados')
     cliente_autor = db.relationship('Usuario', foreign_keys=[id_usuario_cliente_autor],
                                     back_populates='chamados_cliente')
     mensagens = db.relationship('MensagemSuporte', back_populates='chamado',
-                                order_by='MensagemSuporte.data_criacao', lazy='dynamic')
+                                order_by='MensagemSuporte.data_envio', lazy='dynamic')
 
     __table_args__ = (
         CheckConstraint(
@@ -285,11 +330,12 @@ class ChamadoSuporte(db.Model):
 class MensagemSuporte(db.Model):
     __tablename__ = 'mensagem_suporte'
 
-    id = db.Column(db.Integer, primary_key=True)
-    id_chamado = db.Column(db.Integer, db.ForeignKey('chamado_suporte.id'), nullable=False)
-    id_usuario_autor = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    id_mensagem = db.Column(db.Integer, primary_key=True)
+    id_chamado = db.Column(db.Integer, db.ForeignKey('chamado_suporte.id_chamado'),
+                           nullable=False)
+    id_usuario_autor = db.Column(db.Integer, db.ForeignKey('usuario.id_usuario'), nullable=False)
     conteudo = db.Column(db.Text, nullable=False)
-    data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    data_envio = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     chamado = db.relationship('ChamadoSuporte', back_populates='mensagens')
     autor = db.relationship('Usuario', foreign_keys=[id_usuario_autor], back_populates='mensagens')

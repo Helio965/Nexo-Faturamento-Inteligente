@@ -34,11 +34,26 @@
                  value="{{ empresa.email_contato if empresa }}">
         </div>
         <div class="col-md-6">
+          <label class="form-label">Telefone de Contato</label>
+          <input type="text" class="form-control" name="telefone_contato"
+                 value="{{ empresa.telefone_contato if empresa }}" placeholder="(00) 00000-0000">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Data de Contratação</label>
+          <input type="date" class="form-control" name="data_contratacao"
+                 value="{{ empresa.data_contratacao.strftime('%Y-%m-%d') if empresa and empresa.data_contratacao }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Faturamento Base Mensal (R$)</label>
+          <input type="number" step="0.01" class="form-control" name="faturamento_base_mensal"
+                 value="{{ empresa.faturamento_base_mensal if empresa }}" placeholder="0.00">
+        </div>
+        <div class="col-md-6">
           <label class="form-label">Plano <span class="text-danger">*</span></label>
           <select class="form-select" name="id_plano_atual" required>
             {% for p in planos %}
-            <option value="{{ p.id }}"
-              {{ 'selected' if empresa and empresa.id_plano_atual == p.id }}>
+            <option value="{{ p.id_plano }}"
+              {{ 'selected' if empresa and empresa.id_plano_atual == p.id_plano }}>
               {{ p.nome_plano }}
             </option>
             {% endfor %}
@@ -49,8 +64,8 @@
           <select class="form-select" name="id_segmento">
             <option value="">— Selecione —</option>
             {% for s in segmentos %}
-            <option value="{{ s.id }}"
-              {{ 'selected' if empresa and empresa.id_segmento == s.id }}>
+            <option value="{{ s.id_segmento }}"
+              {{ 'selected' if empresa and empresa.id_segmento == s.id_segmento }}>
               {{ s.nome_segmento }}
             </option>
             {% endfor %}

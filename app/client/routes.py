@@ -32,7 +32,7 @@ def dashboard():
     empresa = _empresa_cliente()
 
     ultima_analise = (Analise.query
-                      .filter_by(id_empresa=empresa.id)
+                      .filter_by(id_empresa=empresa.id_empresa)
                       .join(RelatorioAnalise)
                       .filter(RelatorioAnalise.publicado == True)
                       .order_by(Analise.ano_referencia.desc(),
@@ -48,7 +48,6 @@ def dashboard():
         relatorio = ultima_analise.relatorio
 
         if indicador:
-            # Dados para gráfico de barras Plotly (top 3 produtos destacados)
             nomes = []
             valores = []
             if indicador.produto_mais_vendido_nome:
@@ -60,7 +59,7 @@ def dashboard():
             chart_data = json.dumps({'nomes': nomes, 'valores': valores})
 
     tickets_abertos = (ChamadoSuporte.query
-                       .filter_by(id_empresa=empresa.id)
+                       .filter_by(id_empresa=empresa.id_empresa)
                        .filter(ChamadoSuporte.status_chamado.in_(['ABERTO', 'EM_ANDAMENTO']))
                        .count())
 
@@ -82,7 +81,7 @@ def analises():
     empresa = _empresa_cliente()
 
     lista = (Analise.query
-             .filter_by(id_empresa=empresa.id)
+             .filter_by(id_empresa=empresa.id_empresa)
              .join(RelatorioAnalise)
              .filter(RelatorioAnalise.publicado == True)
              .order_by(Analise.ano_referencia.desc(), Analise.mes_referencia.desc())
@@ -98,7 +97,7 @@ def analise_detalhe(id):
     empresa = _empresa_cliente()
 
     # Anti-IDOR: garante que a análise pertence à empresa do cliente
-    analise = Analise.query.filter_by(id=id, id_empresa=empresa.id).first_or_404()
+    analise = Analise.query.filter_by(id_analise=id, id_empresa=empresa.id_empresa).first_or_404()
 
     # Somente análises publicadas
     if not analise.relatorio or not analise.relatorio.publicado:
@@ -137,7 +136,7 @@ def tickets():
     empresa = _empresa_cliente()
 
     aba = request.args.get('aba', 'ativos')
-    query = ChamadoSuporte.query.filter_by(id_empresa=empresa.id)
+    query = ChamadoSuporte.query.filter_by(id_empresa=empresa.id_empresa)
 
     if aba == 'resolvidos':
         query = query.filter_by(status_chamado='RESOLVIDO')
@@ -170,9 +169,10 @@ def ticket_novo():
         prioridade = empresa.plano_atual.prioridade_ticket
 
         chamado = ChamadoSuporte(
-            id_empresa=empresa.id,
-            id_usuario_cliente_autor=current_user.id,
+            id_empresa=empresa.id_empresa,
+            id_usuario_cliente_autor=current_user.id_usuario,
             assunto=assunto,
+            descricao=conteudo,
             prioridade_atendimento=prioridade,
             status_chamado='ABERTO',
         )
@@ -181,15 +181,15 @@ def ticket_novo():
 
         # Primeira mensagem na mesma transação
         mensagem = MensagemSuporte(
-            id_chamado=chamado.id,
-            id_usuario_autor=current_user.id,
+            id_chamado=chamado.id_chamado,
+            id_usuario_autor=current_user.id_usuario,
             conteudo=conteudo,
         )
         db.session.add(mensagem)
         db.session.commit()
 
         flash('Ticket aberto com sucesso.', 'success')
-        return redirect(url_for('client.ticket_detalhe', id=chamado.id))
+        return redirect(url_for('client.ticket_detalhe', id=chamado.id_chamado))
 
     return render_template('client/ticket_novo.html', empresa=empresa)
 
@@ -201,7 +201,8 @@ def ticket_detalhe(id):
     empresa = _empresa_cliente()
 
     # Anti-IDOR
-    chamado = ChamadoSuporte.query.filter_by(id=id, id_empresa=empresa.id).first_or_404()
+    chamado = ChamadoSuporte.query.filter_by(
+        id_chamado=id, id_empresa=empresa.id_empresa).first_or_404()
     mensagens = chamado.mensagens.all()
 
     return render_template('client/ticket_detalhe.html',
@@ -215,7 +216,8 @@ def ticket_mensagem(id):
     empresa = _empresa_cliente()
 
     # Anti-IDOR
-    chamado = ChamadoSuporte.query.filter_by(id=id, id_empresa=empresa.id).first_or_404()
+    chamado = ChamadoSuporte.query.filter_by(
+        id_chamado=id, id_empresa=empresa.id_empresa).first_or_404()
 
     if chamado.status_chamado == 'RESOLVIDO':
         flash('Ticket resolvido é somente leitura. Abra um novo ticket se necessário.', 'warning')
@@ -228,7 +230,7 @@ def ticket_mensagem(id):
 
     mensagem = MensagemSuporte(
         id_chamado=id,
-        id_usuario_autor=current_user.id,
+        id_usuario_autor=current_user.id_usuario,
         conteudo=conteudo,
     )
     db.session.add(mensagem)
