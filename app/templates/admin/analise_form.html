@@ -18,7 +18,7 @@
           <option value="">— Selecione —</option>
           {% for e in empresas %}
           <option value="{{ e.id_empresa }}" data-plano="{{ e.plano_atual.nome_plano }}">
-            {{ e.nome_fantasia }} ({{ e.plano_atual.nome_plano }})
+            {{ e.nome_exibicao }} ({{ e.plano_atual.nome_plano }})
           </option>
           {% endfor %}
         </select>

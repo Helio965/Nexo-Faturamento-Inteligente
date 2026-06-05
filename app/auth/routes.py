@@ -1,5 +1,7 @@
+from datetime import datetime
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
+from app import db
 from app.models import Usuario
 
 auth_bp = Blueprint('auth', __name__)
@@ -43,6 +45,8 @@ def login():
                 return render_template('auth/login.html')
 
         login_user(usuario)
+        usuario.ultimo_acesso = datetime.utcnow()
+        db.session.commit()
 
         if usuario.is_admin:
             return redirect(url_for('admin.dashboard'))

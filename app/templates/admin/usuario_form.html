@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% block title %}Novo Usuário — {{ empresa.nome_fantasia }}{% endblock %}
+{% block title %}Novo Usuário — {{ empresa.nome_exibicao }}{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-4">
   <a href="{{ url_for('admin.empresa_detalhe', id=empresa.id_empresa) }}" class="btn btn-sm btn-outline-secondary">
     <i class="bi bi-arrow-left"></i>
   </a>
-  <h4 class="fw-bold mb-0">Novo Usuário — {{ empresa.nome_fantasia }}</h4>
+  <h4 class="fw-bold mb-0">Novo Usuário — {{ empresa.nome_exibicao }}</h4>
 </div>
 
 <div class="card" style="max-width: 480px;">

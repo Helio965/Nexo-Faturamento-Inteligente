@@ -61,7 +61,7 @@
           <tbody>
             {% for a in analises_recentes %}
             <tr>
-              <td>{{ a.empresa.nome_fantasia }}</td>
+              <td>{{ a.empresa.nome_exibicao }}</td>
               <td>{{ a.periodo_label }}</td>
               <td>
                 <span class="status-badge
@@ -94,7 +94,7 @@
           <tbody>
             {% for t in tickets_recentes %}
             <tr>
-              <td>{{ t.empresa.nome_fantasia }}</td>
+              <td>{{ t.empresa.nome_exibicao }}</td>
               <td><span class="priority-{{ t.prioridade_atendimento }}">{{ t.prioridade_atendimento }}</span></td>
               <td>{{ t.status_chamado }}</td>
               <td><a href="{{ url_for('admin.ticket_detalhe', id=t.id_chamado) }}" class="btn btn-sm btn-outline-secondary">Ver</a></td>

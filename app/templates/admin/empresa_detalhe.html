@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% block title %}{{ empresa.nome_fantasia }} — NEXO Admin{% endblock %}
+{% block title %}{{ empresa.nome_exibicao }} — NEXO Admin{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-4">
   <a href="{{ url_for('admin.empresas') }}" class="btn btn-sm btn-outline-secondary">
     <i class="bi bi-arrow-left"></i>
   </a>
-  <h4 class="fw-bold mb-0">{{ empresa.nome_fantasia }}</h4>
+  <h4 class="fw-bold mb-0">{{ empresa.nome_exibicao }}</h4>
   <span class="status-badge badge-{{ empresa.status_conta }}">{{ empresa.status_conta }}</span>
   <a href="{{ url_for('admin.empresa_editar', id=empresa.id_empresa) }}"
      class="btn btn-sm btn-outline-primary ms-auto">

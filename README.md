@@ -67,7 +67,7 @@ A Central de Tickets mínima (`chamado_suporte` + `mensagem_suporte`) **faz part
 
 ## Indicador de Pressão de Estoque
 
-O indicador **não é** lucro bruto, margem, resultado contábil nem estoque físico real.
+O indicador **não** representa resultado financeiro real, margem, apuração contábil, rentabilidade real nem estoque físico real.
 
 **Cálculo por produto normalizado:**
 
@@ -152,7 +152,7 @@ Acesse: `http://localhost:5000`
 - IA respondendo tickets
 - PDF obrigatório
 - Cadastro de novos administradores pela interface
-- Múltiplos CLIENTEs ADMIN por empresa
+- Múltiplos usuários CLIENTE por empresa
 
 ---
 

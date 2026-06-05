@@ -55,7 +55,7 @@
         {% for t in tickets %}
         <tr>
           <td class="text-muted small">{{ t.id_chamado }}</td>
-          <td>{{ t.empresa.nome_fantasia }}</td>
+          <td>{{ t.empresa.nome_exibicao }}</td>
           <td>{{ t.assunto }}</td>
           <td>
             <span class="priority-{{ t.prioridade_atendimento }}">

@@ -4,7 +4,7 @@ from calendar import monthrange
 from flask import (Blueprint, render_template, redirect, url_for, flash,
                    request, abort, current_app)
 from flask_login import login_required, current_user
-from sqlalchemy import case
+from sqlalchemy import case, or_, desc
 from werkzeug.utils import secure_filename
 
 from app import db
@@ -87,27 +87,30 @@ def empresa_nova():
     segmentos = Segmento.query.filter_by(ativo=True).order_by(Segmento.nome_segmento).all()
 
     if request.method == 'POST':
-        nome_fantasia = request.form.get('nome_fantasia', '').strip()
-        razao_social = request.form.get('razao_social', '').strip() or None
-        cnpj = request.form.get('cnpj', '').strip() or None
-        email_contato = request.form.get('email_contato', '').strip() or None
+        nome_fantasia = request.form.get('nome_fantasia', '').strip() or None
+        razao_social = request.form.get('razao_social', '').strip()
+        cnpj = request.form.get('cnpj', '').strip()
+        email_contato = request.form.get('email_contato', '').strip()
         telefone_contato = request.form.get('telefone_contato', '').strip() or None
         id_plano = request.form.get('id_plano_atual')
-        id_segmento = request.form.get('id_segmento') or None
+        id_segmento = request.form.get('id_segmento')
         fat_base = request.form.get('faturamento_base_mensal', '').strip() or None
-        data_contratacao_str = request.form.get('data_contratacao', '').strip() or None
+        data_contratacao_str = request.form.get('data_contratacao', '').strip()
 
-        if not nome_fantasia or not id_plano:
-            flash('Nome fantasia e plano são obrigatórios.', 'danger')
+        # Campos obrigatórios conforme DER V4.1
+        if not (razao_social and cnpj and email_contato and id_plano
+                and id_segmento and data_contratacao_str):
+            flash('Razão social, CNPJ, e-mail, segmento, plano e data de '
+                  'contratação são obrigatórios.', 'danger')
             return render_template('admin/empresa_form.html', planos=planos,
                                    segmentos=segmentos, empresa=None)
 
-        data_contratacao = None
-        if data_contratacao_str:
-            try:
-                data_contratacao = datetime.strptime(data_contratacao_str, '%Y-%m-%d').date()
-            except ValueError:
-                pass
+        try:
+            data_contratacao = datetime.strptime(data_contratacao_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Data de contratação inválida.', 'danger')
+            return render_template('admin/empresa_form.html', planos=planos,
+                                   segmentos=segmentos, empresa=None)
 
         empresa = Empresa(
             nome_fantasia=nome_fantasia,
@@ -116,14 +119,15 @@ def empresa_nova():
             email_contato=email_contato,
             telefone_contato=telefone_contato,
             id_plano_atual=int(id_plano),
-            id_segmento=int(id_segmento) if id_segmento else None,
+            id_segmento=int(id_segmento),
             faturamento_base_mensal=float(fat_base) if fat_base else None,
             data_contratacao=data_contratacao,
             status_conta='ATIVA',
         )
         db.session.add(empresa)
         db.session.commit()
-        flash(f'Empresa "{empresa.nome_fantasia}" criada com sucesso.', 'success')
+        nome_exib = empresa.nome_fantasia or empresa.razao_social
+        flash(f'Empresa "{nome_exib}" criada com sucesso.', 'success')
         return redirect(url_for('admin.empresa_detalhe', id=empresa.id_empresa))
 
     return render_template('admin/empresa_form.html', planos=planos,
@@ -152,23 +156,39 @@ def empresa_editar(id):
     segmentos = Segmento.query.filter_by(ativo=True).order_by(Segmento.nome_segmento).all()
 
     if request.method == 'POST':
-        empresa.nome_fantasia = request.form.get('nome_fantasia', '').strip()
-        empresa.razao_social = request.form.get('razao_social', '').strip() or None
-        empresa.cnpj = request.form.get('cnpj', '').strip() or None
-        empresa.email_contato = request.form.get('email_contato', '').strip() or None
-        empresa.telefone_contato = request.form.get('telefone_contato', '').strip() or None
-        empresa.id_plano_atual = int(request.form.get('id_plano_atual'))
+        razao_social = request.form.get('razao_social', '').strip()
+        cnpj = request.form.get('cnpj', '').strip()
+        email_contato = request.form.get('email_contato', '').strip()
+        id_plano = request.form.get('id_plano_atual')
         id_seg = request.form.get('id_segmento')
-        empresa.id_segmento = int(id_seg) if id_seg else None
+        data_contratacao_str = request.form.get('data_contratacao', '').strip()
+
+        # Campos obrigatórios conforme DER V4.1
+        if not (razao_social and cnpj and email_contato and id_plano
+                and id_seg and data_contratacao_str):
+            flash('Razão social, CNPJ, e-mail, segmento, plano e data de '
+                  'contratação são obrigatórios.', 'danger')
+            return render_template('admin/empresa_form.html', planos=planos,
+                                   segmentos=segmentos, empresa=empresa)
+
+        try:
+            data_contratacao = datetime.strptime(data_contratacao_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Data de contratação inválida.', 'danger')
+            return render_template('admin/empresa_form.html', planos=planos,
+                                   segmentos=segmentos, empresa=empresa)
+
+        empresa.nome_fantasia = request.form.get('nome_fantasia', '').strip() or None
+        empresa.razao_social = razao_social
+        empresa.cnpj = cnpj
+        empresa.email_contato = email_contato
+        empresa.telefone_contato = request.form.get('telefone_contato', '').strip() or None
+        empresa.id_plano_atual = int(id_plano)
+        empresa.id_segmento = int(id_seg)
         empresa.status_conta = request.form.get('status_conta', 'ATIVA')
         fat_base = request.form.get('faturamento_base_mensal', '').strip()
         empresa.faturamento_base_mensal = float(fat_base) if fat_base else None
-        data_contratacao_str = request.form.get('data_contratacao', '').strip()
-        if data_contratacao_str:
-            try:
-                empresa.data_contratacao = datetime.strptime(data_contratacao_str, '%Y-%m-%d').date()
-            except ValueError:
-                pass
+        empresa.data_contratacao = data_contratacao
 
         db.session.commit()
         flash('Empresa atualizada.', 'success')
@@ -555,19 +575,27 @@ def tickets():
     query = ChamadoSuporte.query
 
     if busca:
-        query = query.join(Empresa).filter(
-            db.or_(
-                ChamadoSuporte.assunto.ilike(f'%{busca}%'),
-                Empresa.nome_fantasia.ilike(f'%{busca}%'),
-            )
-        )
+        condicoes = [
+            ChamadoSuporte.assunto.ilike(f'%{busca}%'),
+            Empresa.nome_fantasia.ilike(f'%{busca}%'),
+            Empresa.razao_social.ilike(f'%{busca}%'),
+        ]
+        # Busca numérica também casa o identificador do ticket
+        if busca.isdigit():
+            condicoes.append(ChamadoSuporte.id_chamado == int(busca))
+        query = query.join(Empresa).filter(or_(*condicoes))
 
     if aba == 'arquivados':
         query = query.filter(ChamadoSuporte.status_chamado == 'RESOLVIDO')
     else:
         query = query.filter(ChamadoSuporte.status_chamado != 'RESOLVIDO')
 
-    tickets_lista = query.order_by(ordem_prioridade, ChamadoSuporte.data_abertura).all()
+    # Ordenação: prioridade (ALTA > MEDIA > BAIXA), depois mais recentes primeiro
+    tickets_lista = query.order_by(
+        ordem_prioridade,
+        desc(ChamadoSuporte.data_atualizacao),
+        desc(ChamadoSuporte.data_abertura),
+    ).all()
 
     return render_template('admin/tickets.html',
                            tickets=tickets_lista, aba=aba, busca=busca)
