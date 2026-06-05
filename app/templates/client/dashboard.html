@@ -115,6 +115,46 @@
 </div>
 {% endif %}
 
+<!-- Análises em andamento (somente status; sem KPIs/devolutiva antes da publicação) -->
+<div class="card mt-4">
+  <div class="card-header fw-semibold">Análises em andamento</div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Período</th>
+          <th>Tipo</th>
+          <th>Referência</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in analises_andamento %}
+        <tr>
+          <td>{{ a.periodo_label }}</td>
+          <td><span class="badge bg-light text-dark border">{{ a.tipo_analise }}</span></td>
+          <td>{{ '%02d'|format(a.mes_referencia) }}/{{ a.ano_referencia }}</td>
+          <td>
+            <span class="status-badge
+              {% if a.status_analise == 'EM_ANALISE' %}bg-warning text-dark
+              {% elif a.status_analise == 'RELATORIO_RECEBIDO' %}bg-info text-dark
+              {% else %}bg-secondary{% endif %}">
+              {{ a.status_analise | replace('_', ' ') }}
+            </span>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="text-muted text-center py-3">
+            Nenhuma análise em andamento no momento.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}

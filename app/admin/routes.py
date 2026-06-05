@@ -4,7 +4,7 @@ from calendar import monthrange
 from flask import (Blueprint, render_template, redirect, url_for, flash,
                    request, abort, current_app)
 from flask_login import login_required, current_user
-from sqlalchemy import case, or_, desc
+from sqlalchemy import case, or_, desc, func
 from werkzeug.utils import secure_filename
 
 from app import db
@@ -53,6 +53,34 @@ def dashboard():
         ChamadoSuporte.status_chamado.in_(['ABERTO', 'EM_ANDAMENTO'])
     ).count()
 
+    # Indicadores operacionais — empresas por status_conta
+    empresas_por_status = {
+        'ATIVA': total_ativas,
+        'SUSPENSA': Empresa.query.filter_by(status_conta='SUSPENSA').count(),
+        'CANCELADA': Empresa.query.filter_by(status_conta='CANCELADA').count(),
+    }
+
+    # Indicadores operacionais — empresas por plano
+    contagem_planos = dict(
+        db.session.query(Plano.nome_plano, func.count(Empresa.id_empresa))
+        .outerjoin(Empresa, Empresa.id_plano_atual == Plano.id_plano)
+        .group_by(Plano.nome_plano).all()
+    )
+    empresas_por_plano = {
+        'BRONZE': contagem_planos.get('BRONZE', 0),
+        'PRATA': contagem_planos.get('PRATA', 0),
+        'OURO': contagem_planos.get('OURO', 0),
+    }
+
+    # Receita estimada mensal — soma de valor_mensal apenas de empresas ATIVAS.
+    # Não é cobrança/faturamento real; é uma estimativa operacional.
+    receita_estimada_mensal = (
+        db.session.query(func.coalesce(func.sum(Plano.valor_mensal), 0))
+        .join(Empresa, Empresa.id_plano_atual == Plano.id_plano)
+        .filter(Empresa.status_conta == 'ATIVA')
+        .scalar()
+    )
+
     analises_recentes = (Analise.query
                          .order_by(Analise.data_criacao.desc())
                          .limit(5).all())
@@ -65,6 +93,9 @@ def dashboard():
                            total_ativas=total_ativas,
                            analises_pendentes=analises_pendentes,
                            tickets_abertos=tickets_abertos,
+                           empresas_por_status=empresas_por_status,
+                           empresas_por_plano=empresas_por_plano,
+                           receita_estimada_mensal=receita_estimada_mensal,
                            analises_recentes=analises_recentes,
                            tickets_recentes=tickets_recentes)
 
@@ -206,6 +237,11 @@ def usuario_novo(id_empresa):
     _requer_admin()
     empresa = db.session.get(Empresa, id_empresa) or abort(404)
 
+    # Empresa CANCELADA não recebe novos acessos de cliente.
+    if empresa.status_conta == 'CANCELADA':
+        flash('Não é permitido cadastrar novo CLIENTE para empresa CANCELADA.', 'danger')
+        return redirect(url_for('admin.empresa_detalhe', id=empresa.id_empresa))
+
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip()
         email = request.form.get('email', '').strip().lower()
@@ -213,6 +249,14 @@ def usuario_novo(id_empresa):
 
         if not nome or not email or not senha:
             flash('Todos os campos são obrigatórios.', 'danger')
+            return render_template('admin/usuario_form.html', empresa=empresa)
+
+        # Regra PI2: no máximo um usuário CLIENTE ativo por empresa.
+        cliente_ativo = Usuario.query.filter_by(
+            id_empresa=empresa.id_empresa, role='CLIENTE', ativo=True).first()
+        if cliente_ativo:
+            flash('Esta empresa já possui um usuário CLIENTE ativo. Desative o '
+                  'usuário atual antes de cadastrar outro responsável.', 'danger')
             return render_template('admin/usuario_form.html', empresa=empresa)
 
         if Usuario.query.filter_by(email=email).first():

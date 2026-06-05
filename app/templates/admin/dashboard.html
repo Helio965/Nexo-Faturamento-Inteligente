@@ -49,6 +49,57 @@
   </div>
 </div>
 
+<!-- Indicadores operacionais -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Empresas por Status</div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between mb-1">
+          <span><span class="status-badge badge-ATIVA">ATIVA</span></span>
+          <strong>{{ empresas_por_status['ATIVA'] }}</strong>
+        </div>
+        <div class="d-flex justify-content-between mb-1">
+          <span><span class="status-badge badge-SUSPENSA">SUSPENSA</span></span>
+          <strong>{{ empresas_por_status['SUSPENSA'] }}</strong>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span><span class="status-badge badge-CANCELADA">CANCELADA</span></span>
+          <strong>{{ empresas_por_status['CANCELADA'] }}</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Empresas por Plano</div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between mb-1">
+          <span><span class="badge bg-light text-dark border">BRONZE</span></span>
+          <strong>{{ empresas_por_plano['BRONZE'] }}</strong>
+        </div>
+        <div class="d-flex justify-content-between mb-1">
+          <span><span class="badge bg-secondary">PRATA</span></span>
+          <strong>{{ empresas_por_plano['PRATA'] }}</strong>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span><span class="badge bg-warning text-dark">OURO</span></span>
+          <strong>{{ empresas_por_plano['OURO'] }}</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Receita Estimada Mensal</div>
+      <div class="card-body d-flex flex-column justify-content-center">
+        <div class="kpi-value">R$ {{ '{:,.2f}'.format(receita_estimada_mensal | float) }}</div>
+        <small class="text-muted">soma de planos de empresas ATIVAS — estimativa, não é cobrança real</small>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="row g-4">
   <div class="col-md-7">
     <div class="card">

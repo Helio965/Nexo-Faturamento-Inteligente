@@ -125,7 +125,7 @@ Acesse: `http://localhost:5000`
 
 ### 5. Login
 
-- Usar e-mail e senha definidos no `.env` (ADMIN_EMAIL / ADMIN_SENHA)
+- Usar e-mail e senha definidos no `.env` (ADMIN_MASTER_EMAIL / ADMIN_MASTER_SENHA)
 
 ---
 

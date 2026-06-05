@@ -5,10 +5,11 @@ Cria as tabelas, insere planos e segmento padrão, e cria o ADMIN master.
 Uso:
     python seed.py
 
-Variáveis de ambiente necessárias (ou defina no .env):
-    ADMIN_NOME   - nome do administrador (default: Administrador)
-    ADMIN_EMAIL  - e-mail do administrador
-    ADMIN_SENHA  - senha do administrador
+Variáveis de ambiente obrigatórias (defina no .env a partir de .env.example):
+    ADMIN_MASTER_NOME   - nome do administrador master
+    ADMIN_MASTER_EMAIL  - e-mail do administrador master
+    ADMIN_MASTER_SENHA  - senha do administrador master
+    PLANO_BRONZE_VALOR_MENSAL / PLANO_PRATA_VALOR_MENSAL / PLANO_OURO_VALOR_MENSAL
 """
 import os
 from dotenv import load_dotenv
@@ -88,27 +89,39 @@ with app.app_context():
 
     db.session.commit()
 
-    # Admin master
-    admin_email = os.environ.get('ADMIN_EMAIL', 'admin@nexo.com')
-    admin_nome = os.environ.get('ADMIN_NOME', 'Administrador')
-    admin_senha = os.environ.get('ADMIN_SENHA')
+    # Admin master — sem fallback hardcoded. Todas as variáveis são obrigatórias.
+    admin_nome = os.environ.get('ADMIN_MASTER_NOME')
+    admin_email = os.environ.get('ADMIN_MASTER_EMAIL')
+    admin_senha = os.environ.get('ADMIN_MASTER_SENHA')
 
-    if not admin_senha:
-        print("\nERRO: defina ADMIN_SENHA no .env antes de rodar o seed.")
+    admin_faltando = [
+        nome for nome, valor in (
+            ('ADMIN_MASTER_NOME', admin_nome),
+            ('ADMIN_MASTER_EMAIL', admin_email),
+            ('ADMIN_MASTER_SENHA', admin_senha),
+        ) if not valor
+    ]
+    if admin_faltando:
+        raise SystemExit(
+            "ERRO: variável "
+            + ", ".join(admin_faltando)
+            + " não definida. Crie um .env a partir de .env.example."
+        )
+
+    admin_email = admin_email.strip().lower()
+    if not Usuario.query.filter_by(email=admin_email).first():
+        admin = Usuario(
+            nome=admin_nome,
+            email=admin_email,
+            role='ADMIN',
+            id_empresa=None,
+            ativo=True,
+        )
+        admin.set_password(admin_senha)
+        db.session.add(admin)
+        db.session.commit()
+        print(f"  Admin criado: {admin_email}")
     else:
-        if not Usuario.query.filter_by(email=admin_email).first():
-            admin = Usuario(
-                nome=admin_nome,
-                email=admin_email,
-                role='ADMIN',
-                id_empresa=None,
-                ativo=True,
-            )
-            admin.set_password(admin_senha)
-            db.session.add(admin)
-            db.session.commit()
-            print(f"  Admin criado: {admin_email}")
-        else:
-            print(f"  Admin já existe: {admin_email}")
+        print(f"  Admin já existe: {admin_email}")
 
     print("\nSeed concluído.")
