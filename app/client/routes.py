@@ -63,13 +63,24 @@ def dashboard():
                        .filter(ChamadoSuporte.status_chamado.in_(['ABERTO', 'EM_ANDAMENTO']))
                        .count())
 
+    # Análises em andamento (anti-IDOR: somente da própria empresa).
+    # Apenas status operacional — sem KPIs/dashboard/devolutiva antes da publicação.
+    analises_andamento = (Analise.query
+                          .filter(Analise.id_empresa == empresa.id_empresa)
+                          .filter(Analise.status_analise.in_(
+                              ['AGUARDANDO_RELATORIO', 'RELATORIO_RECEBIDO', 'EM_ANALISE']))
+                          .order_by(Analise.ano_referencia.desc(),
+                                    Analise.mes_referencia.desc())
+                          .all())
+
     return render_template('client/dashboard.html',
                            empresa=empresa,
                            ultima_analise=ultima_analise,
                            indicador=indicador,
                            relatorio=relatorio,
                            chart_data=chart_data,
-                           tickets_abertos=tickets_abertos)
+                           tickets_abertos=tickets_abertos,
+                           analises_andamento=analises_andamento)
 
 
 # ---------- Análises ---------------------------------------------------------
