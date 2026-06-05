@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block title %}Nova Análise — NEXO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+  <a href="{{ url_for('admin.analises') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="fw-bold mb-0">Nova Análise</h4>
+</div>
+
+<div class="card" style="max-width: 560px;">
+  <div class="card-body">
+    <form method="POST" id="formAnalise">
+      <div class="mb-3">
+        <label class="form-label">Empresa <span class="text-danger">*</span></label>
+        <select class="form-select" name="id_empresa" required>
+          <option value="">— Selecione —</option>
+          {% for e in empresas %}
+          <option value="{{ e.id }}" data-plano="{{ e.plano_atual.nome_plano }}">
+            {{ e.nome_fantasia }} ({{ e.plano_atual.nome_plano }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Tipo de Análise <span class="text-danger">*</span></label>
+        <select class="form-select" name="tipo_analise" id="tipoAnalise" required>
+          <option value="MENSAL">MENSAL</option>
+          <option value="QUINZENAL">QUINZENAL (somente plano OURO)</option>
+        </select>
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <label class="form-label">Mês <span class="text-danger">*</span></label>
+          <select class="form-select" name="mes_referencia" required>
+            {% for m in range(1, 13) %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Ano <span class="text-danger">*</span></label>
+          <input type="number" class="form-control" name="ano_referencia"
+                 value="{{ now.year }}" min="2020" max="2100" required>
+        </div>
+        <div class="col-md-4" id="quinzenaDiv" style="display:none;">
+          <label class="form-label">Quinzena</label>
+          <select class="form-select" name="quinzena_referencia">
+            <option value="1">1ª</option>
+            <option value="2">2ª</option>
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-lg"></i> Criar Análise
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('tipoAnalise').addEventListener('change', function () {
+  const div = document.getElementById('quinzenaDiv');
+  div.style.display = this.value === 'QUINZENAL' ? '' : 'none';
+});
+</script>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}Suporte — NEXO{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-headset text-primary"></i> Suporte</h4>
+  {% if empresa.status_conta != 'CANCELADA' %}
+  <a href="{{ url_for('client.ticket_novo') }}" class="btn btn-primary">
+    <i class="bi bi-plus-circle"></i> Novo Ticket
+  </a>
+  {% endif %}
+</div>
+
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if aba == 'ativos' %}active{% endif %}"
+       href="{{ url_for('client.tickets', aba='ativos') }}">Ativos</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if aba == 'resolvidos' %}active{% endif %}"
+       href="{{ url_for('client.tickets', aba='resolvidos') }}">Resolvidos</a>
+  </li>
+</ul>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>#</th>
+          <th>Assunto</th>
+          <th>Prioridade</th>
+          <th>Status</th>
+          <th>Última atualização</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in chamados %}
+        <tr>
+          <td class="text-muted small">{{ c.id }}</td>
+          <td>{{ c.assunto }}</td>
+          <td><span class="priority-{{ c.prioridade_atendimento }}">{{ c.prioridade_atendimento }}</span></td>
+          <td>
+            <span class="status-badge
+              {% if c.status_chamado == 'ABERTO' %}bg-danger
+              {% elif c.status_chamado == 'EM_ANDAMENTO' %}bg-warning text-dark
+              {% elif c.status_chamado == 'RESPONDIDO' %}bg-primary
+              {% else %}bg-secondary{% endif %}">
+              {{ c.status_chamado | replace('_', ' ') }}
+            </span>
+          </td>
+          <td class="text-muted small">{{ c.data_atualizacao.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>
+            <a href="{{ url_for('client.ticket_detalhe', id=c.id) }}"
+               class="btn btn-sm btn-outline-primary">Abrir</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-muted text-center py-4">Nenhum ticket.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

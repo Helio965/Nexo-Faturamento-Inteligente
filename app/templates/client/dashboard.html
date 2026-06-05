@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — {{ empresa.nome_fantasia }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h4 class="fw-bold mb-0">{{ empresa.nome_fantasia }}</h4>
+    <small class="text-muted">
+      Plano {{ empresa.plano_atual.nome_plano }} —
+      <span class="status-badge badge-{{ empresa.status_conta }}">{{ empresa.status_conta }}</span>
+    </small>
+  </div>
+  {% if empresa.status_conta != 'CANCELADA' %}
+  <a href="{{ url_for('client.ticket_novo') }}" class="btn btn-outline-primary btn-sm">
+    <i class="bi bi-plus-circle"></i> Abrir Ticket
+    {% if tickets_abertos > 0 %}
+    <span class="badge bg-danger ms-1">{{ tickets_abertos }}</span>
+    {% endif %}
+  </a>
+  {% endif %}
+</div>
+
+{% if empresa.status_conta == 'SUSPENSA' %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle"></i>
+  <strong>Conta Suspensa.</strong> Você pode visualizar análises publicadas e abrir tickets,
+  mas não receberá novas análises enquanto a conta estiver suspensa.
+</div>
+{% endif %}
+
+{% if ultima_analise and indicador %}
+{% set ind = indicador %}
+<h6 class="text-muted mb-3">Última análise publicada: <strong>{{ ultima_analise.periodo_label }}</strong></h6>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card kpi-card">
+      <div class="card-body">
+        <div class="kpi-label">Faturamento Total</div>
+        <div class="kpi-value">
+          {% if ind.faturamento_total is not none %}
+            R$ {{ '{:,.2f}'.format(ind.faturamento_total | float) }}
+          {% else %}—{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card">
+      <div class="card-body">
+        <div class="kpi-label">Total Comprado</div>
+        <div class="kpi-value">
+          {% if ind.total_comprado is not none %}
+            R$ {{ '{:,.2f}'.format(ind.total_comprado | float) }}
+          {% else %}—{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card">
+      <div class="card-body">
+        <div class="kpi-label">Indicador de Pressão de Estoque</div>
+        <div class="kpi-value fs-5">
+          {% if ind.saldo_estimado_compras_vendas is not none %}
+            R$ {{ '{:,.2f}'.format(ind.saldo_estimado_compras_vendas | float) }}
+          {% else %}<span class="fs-6 text-muted">Indisponível</span>{% endif %}
+        </div>
+        <small class="text-muted">valor estimado parado em estoque</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card">
+      <div class="card-body">
+        <div class="kpi-label">Produto + Vendido</div>
+        <div class="kpi-value fs-5">{{ ind.produto_mais_vendido_nome or '—' }}</div>
+        <small class="text-muted">
+          {{ ind.produto_mais_vendido_quantidade | float | round(1) if ind.produto_mais_vendido_quantidade else '' }} un.
+        </small>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if chart_data %}
+<div class="card mb-4">
+  <div class="card-header fw-semibold">Destaques do Período</div>
+  <div class="card-body">
+    <div id="chart-kpis" style="height:280px;"></div>
+  </div>
+</div>
+{% endif %}
+
+{% if relatorio %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+    Relatório Estratégico
+    <a href="{{ url_for('client.analise_detalhe', id=ultima_analise.id) }}"
+       class="btn btn-sm btn-outline-primary">Ver completo</a>
+  </div>
+  <div class="card-body">
+    <h6>{{ relatorio.titulo }}</h6>
+    {% if relatorio.resumo_executivo %}
+    <p class="text-muted">{{ relatorio.resumo_executivo[:300] }}{% if relatorio.resumo_executivo | length > 300 %}…{% endif %}</p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle"></i> Nenhuma análise publicada disponível ainda.
+  Aguarde o processamento do seu próximo relatório.
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+{% if chart_data %}
+<script>
+  const data = {{ chart_data | safe }};
+  Plotly.newPlot('chart-kpis', [{
+    type: 'bar',
+    x: data.nomes,
+    y: data.valores,
+    marker: { color: ['#0d6efd', '#198754'] }
+  }], {
+    margin: { t: 10, b: 60, l: 60, r: 10 },
+    yaxis: { title: 'Valor' },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)'
+  }, { responsive: true });
+</script>
+{% endif %}
+{% endblock %}

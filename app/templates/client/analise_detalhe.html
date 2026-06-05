@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% block title %}{{ analise.periodo_label }} — NEXO{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+  <a href="{{ url_for('client.analises') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="fw-bold mb-0">Análise — {{ analise.periodo_label }}</h4>
+</div>
+
+{% if indicador %}
+{% set ind = indicador %}
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card kpi-card">
+      <div class="card-body">
+        <div class="kpi-label">Faturamento Total</div>
+        <div class="kpi-value">
+          {% if ind.faturamento_total is not none %}
+            R$ {{ '{:,.2f}'.format(ind.faturamento_total | float) }}
+          {% else %}—{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card kpi-card">
+      <div class="card-body">
+        <div class="kpi-label">Total Comprado</div>
+        <div class="kpi-value">
+          {% if ind.total_comprado is not none %}
+            R$ {{ '{:,.2f}'.format(ind.total_comprado | float) }}
+          {% else %}—{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card kpi-card">
+      <div class="card-body">
+        <div class="kpi-label">Indicador de Pressão de Estoque</div>
+        <div class="kpi-value fs-5">
+          {% if ind.saldo_estimado_compras_vendas is not none %}
+            R$ {{ '{:,.2f}'.format(ind.saldo_estimado_compras_vendas | float) }}
+          {% else %}<span class="fs-6 text-muted">Dados insuficientes</span>{% endif %}
+        </div>
+        <small class="text-muted">valor estimado parado em estoque</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card bg-light">
+      <div class="card-body">
+        <div class="kpi-label">Produto Mais Vendido</div>
+        <strong>{{ ind.produto_mais_vendido_nome or '—' }}</strong>
+        <div class="text-muted small">
+          {{ ind.produto_mais_vendido_quantidade | float | round(1) if ind.produto_mais_vendido_quantidade else '' }} un.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card bg-light">
+      <div class="card-body">
+        <div class="kpi-label">Produto de Maior Faturamento</div>
+        <strong>{{ ind.produto_maior_faturamento_nome or '—' }}</strong>
+        <div class="text-muted small">
+          {% if ind.produto_maior_faturamento_valor %}
+            R$ {{ '{:,.2f}'.format(ind.produto_maior_faturamento_valor | float) }}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card bg-light">
+      <div class="card-body">
+        <div class="kpi-label">Produto c/ Maior Saldo Parado</div>
+        <strong>{{ ind.produto_maior_saldo_parado_nome or '—' }}</strong>
+        <div class="text-muted small">
+          {{ ind.saldo_estimado_parado | float | round(1) if ind.saldo_estimado_parado else '' }} un. estimadas
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if chart_data %}
+<div class="card mb-4">
+  <div class="card-header fw-semibold">Destaques de Produtos</div>
+  <div class="card-body">
+    <div id="chart-produtos" style="height:300px;"></div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+{% if relatorio %}
+<div class="card">
+  <div class="card-header fw-semibold">Relatório Estratégico</div>
+  <div class="card-body">
+    <h5>{{ relatorio.titulo }}</h5>
+    <p class="text-muted small">
+      Publicado em {{ relatorio.data_publicacao.strftime('%d/%m/%Y') if relatorio.data_publicacao }}
+    </p>
+
+    {% if relatorio.resumo_executivo %}
+    <h6 class="mt-3">Resumo Executivo</h6>
+    <p style="white-space:pre-wrap;">{{ relatorio.resumo_executivo }}</p>
+    {% endif %}
+
+    {% if relatorio.pontos_positivos %}
+    <h6 class="mt-3 text-success"><i class="bi bi-check-circle"></i> Pontos Positivos</h6>
+    <p style="white-space:pre-wrap;">{{ relatorio.pontos_positivos }}</p>
+    {% endif %}
+
+    {% if relatorio.pontos_de_alerta %}
+    <h6 class="mt-3 text-warning"><i class="bi bi-exclamation-triangle"></i> Pontos de Alerta</h6>
+    <p style="white-space:pre-wrap;">{{ relatorio.pontos_de_alerta }}</p>
+    {% endif %}
+
+    {% if relatorio.recomendacoes %}
+    <h6 class="mt-3 text-primary"><i class="bi bi-lightbulb"></i> Recomendações</h6>
+    <p style="white-space:pre-wrap;">{{ relatorio.recomendacoes }}</p>
+    {% endif %}
+
+    {% if relatorio.conclusao_estrategica %}
+    <h6 class="mt-3">Conclusão Estratégica</h6>
+    <div class="border-start border-primary border-4 ps-3">
+      <p style="white-space:pre-wrap;">{{ relatorio.conclusao_estrategica }}</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if chart_data %}
+<script>
+  const data = {{ chart_data | safe }};
+  Plotly.newPlot('chart-produtos', [{
+    type: 'bar',
+    x: data.nomes,
+    y: data.valores,
+    marker: { color: ['#0d6efd', '#198754', '#fd7e14'] }
+  }], {
+    margin: { t: 10, b: 80, l: 60, r: 10 },
+    yaxis: { title: 'Valor / Quantidade' },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)'
+  }, { responsive: true });
+</script>
+{% endif %}
+{% endblock %}

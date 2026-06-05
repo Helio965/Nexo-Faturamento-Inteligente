@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}Relatório Estratégico — Análise #{{ analise.id }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+  <a href="{{ url_for('admin.analise_detalhe', id=analise.id) }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="fw-bold mb-0">
+    Relatório Estratégico — {{ analise.empresa.nome_fantasia }} / {{ analise.periodo_label }}
+  </h4>
+  {% if relatorio and relatorio.publicado %}
+  <span class="badge bg-success">Publicado</span>
+  {% elif relatorio %}
+  <span class="badge bg-secondary">Rascunho</span>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <form method="POST">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Título <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" name="titulo"
+               value="{{ relatorio.titulo if relatorio }}" required
+               placeholder="Ex.: Análise de Desempenho — Mai/2026">
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Resumo Executivo</label>
+        <textarea class="form-control" name="resumo_executivo" rows="3"
+                  placeholder="Visão geral do período...">{{ relatorio.resumo_executivo if relatorio }}</textarea>
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Pontos Positivos</label>
+          <textarea class="form-control" name="pontos_positivos" rows="4"
+                    placeholder="O que foi bem no período...">{{ relatorio.pontos_positivos if relatorio }}</textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Pontos de Alerta</label>
+          <textarea class="form-control" name="pontos_de_alerta" rows="4"
+                    placeholder="O que requer atenção...">{{ relatorio.pontos_de_alerta if relatorio }}</textarea>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Recomendações</label>
+        <textarea class="form-control" name="recomendacoes" rows="3"
+                  placeholder="Sugestões de ação para o próximo período...">{{ relatorio.recomendacoes if relatorio }}</textarea>
+      </div>
+      <div class="mb-4">
+        <label class="form-label fw-semibold">
+          Conclusão Estratégica <span class="text-danger">*</span>
+        </label>
+        <textarea class="form-control" name="conclusao_estrategica" rows="4" required
+                  placeholder="Síntese estratégica e direcionamento para o negócio...">{{ relatorio.conclusao_estrategica if relatorio }}</textarea>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-floppy"></i> Salvar Rascunho
+        </button>
+        <a href="{{ url_for('admin.analise_detalhe', id=analise.id) }}"
+           class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
