@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Ticket #{{ chamado.id }} — NEXO{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+  <a href="{{ url_for('client.tickets') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="fw-bold mb-0">Ticket #{{ chamado.id }}</h4>
+  <span class="status-badge
+    {% if chamado.status_chamado == 'ABERTO' %}bg-danger
+    {% elif chamado.status_chamado == 'EM_ANDAMENTO' %}bg-warning text-dark
+    {% elif chamado.status_chamado == 'RESPONDIDO' %}bg-primary
+    {% else %}bg-secondary{% endif %}">
+    {{ chamado.status_chamado | replace('_', ' ') }}
+  </span>
+</div>
+
+{% if chamado.status_chamado == 'RESOLVIDO' %}
+<div class="alert alert-secondary">
+  <i class="bi bi-lock"></i>
+  Este ticket está <strong>resolvido</strong> e é somente leitura.
+  Se precisar tratar novo assunto, <a href="{{ url_for('client.ticket_novo') }}">abra um novo ticket</a>.
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header fw-semibold">{{ chamado.assunto }}</div>
+  <div class="card-body" style="max-height:500px; overflow-y:auto;" id="msgArea">
+    {% for msg in mensagens %}
+    <div class="mb-3 {% if msg.autor.is_admin %}text-end{% endif %}">
+      <div class="d-inline-block text-start
+        {% if msg.autor.is_admin %}bg-primary text-white{% else %}bg-light{% endif %}
+        rounded p-3" style="max-width:85%;">
+        <div class="fw-semibold small mb-1">
+          {{ msg.autor.nome }}
+          <span class="badge {% if msg.autor.is_admin %}bg-white text-primary{% else %}bg-secondary{% endif %} ms-1">
+            {{ 'NEXO' if msg.autor.is_admin else 'Você' }}
+          </span>
+        </div>
+        <div style="white-space:pre-wrap;">{{ msg.conteudo }}</div>
+        <div class="small mt-1 {% if msg.autor.is_admin %}text-white-50{% else %}text-muted{% endif %}">
+          {{ msg.data_criacao.strftime('%d/%m/%Y %H:%M') }}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if chamado.status_chamado != 'RESOLVIDO' %}
+  <div class="card-footer">
+    <form method="POST" action="{{ url_for('client.ticket_mensagem', id=chamado.id) }}">
+      <div class="d-flex gap-2">
+        <textarea class="form-control" name="conteudo" rows="2"
+                  placeholder="Sua resposta…" required></textarea>
+        <button type="submit" class="btn btn-primary align-self-end">
+          <i class="bi bi-send"></i>
+        </button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const area = document.getElementById('msgArea');
+  if (area) area.scrollTop = area.scrollHeight;
+</script>
+{% endblock %}

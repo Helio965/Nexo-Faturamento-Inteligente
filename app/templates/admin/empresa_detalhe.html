@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% block title %}{{ empresa.nome_fantasia }} — NEXO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+  <a href="{{ url_for('admin.empresas') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="fw-bold mb-0">{{ empresa.nome_fantasia }}</h4>
+  <span class="status-badge badge-{{ empresa.status_conta }}">{{ empresa.status_conta }}</span>
+  <a href="{{ url_for('admin.empresa_editar', id=empresa.id) }}"
+     class="btn btn-sm btn-outline-primary ms-auto">
+    <i class="bi bi-pencil"></i> Editar
+  </a>
+</div>
+
+<div class="row g-4">
+  <!-- Dados da empresa -->
+  <div class="col-md-5">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Dados</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-5">Razão Social</dt>
+          <dd class="col-sm-7">{{ empresa.razao_social or '—' }}</dd>
+          <dt class="col-sm-5">CNPJ</dt>
+          <dd class="col-sm-7">{{ empresa.cnpj or '—' }}</dd>
+          <dt class="col-sm-5">E-mail</dt>
+          <dd class="col-sm-7">{{ empresa.email_contato or '—' }}</dd>
+          <dt class="col-sm-5">Plano</dt>
+          <dd class="col-sm-7">
+            <span class="badge
+              {% if empresa.plano_atual.nome_plano == 'OURO' %}bg-warning text-dark
+              {% elif empresa.plano_atual.nome_plano == 'PRATA' %}bg-secondary
+              {% else %}bg-light text-dark border{% endif %}">
+              {{ empresa.plano_atual.nome_plano }}
+            </span>
+          </dd>
+          <dt class="col-sm-5">Segmento</dt>
+          <dd class="col-sm-7">{{ empresa.segmento.nome_segmento if empresa.segmento else '—' }}</dd>
+          <dt class="col-sm-5">Criada em</dt>
+          <dd class="col-sm-7">{{ empresa.data_criacao.strftime('%d/%m/%Y') }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- Usuários -->
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+        Usuários
+        <a href="{{ url_for('admin.usuario_novo', id_empresa=empresa.id) }}"
+           class="btn btn-sm btn-primary">
+          <i class="bi bi-person-plus"></i> Novo Usuário
+        </a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>Nome</th><th>E-mail</th><th>Ativo</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for u in usuarios %}
+            <tr>
+              <td>{{ u.nome }}</td>
+              <td>{{ u.email }}</td>
+              <td>
+                {% if u.ativo %}<span class="badge bg-success">Sim</span>
+                {% else %}<span class="badge bg-secondary">Não</span>{% endif %}
+              </td>
+              <td>
+                <form method="POST" action="{{ url_for('admin.usuario_toggle', id=u.id) }}"
+                      class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-outline-{{ 'danger' if u.ativo else 'success' }}">
+                    {{ 'Desativar' if u.ativo else 'Ativar' }}
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-muted text-center py-3">Nenhum usuário.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Análises -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+        Análises
+        {% if empresa.status_conta == 'ATIVA' %}
+        <a href="{{ url_for('admin.analise_nova') }}" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-circle"></i> Nova Análise
+        </a>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>Período</th><th>Tipo</th><th>Plano Ref.</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for a in analises %}
+            <tr>
+              <td>{{ a.periodo_label }}</td>
+              <td>{{ a.tipo_analise }}</td>
+              <td>{{ a.plano_referencia.nome_plano }}</td>
+              <td>
+                <span class="status-badge
+                  {% if a.status_analise == 'CONCLUIDO' %}bg-success
+                  {% elif a.status_analise == 'EM_ANALISE' %}bg-warning text-dark
+                  {% elif a.status_analise == 'RELATORIO_RECEBIDO' %}bg-info text-dark
+                  {% else %}bg-secondary{% endif %}">
+                  {{ a.status_analise | replace('_', ' ') }}
+                </span>
+              </td>
+              <td>
+                <a href="{{ url_for('admin.analise_detalhe', id=a.id) }}"
+                   class="btn btn-sm btn-outline-primary">Ver</a>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-muted text-center py-3">Nenhuma análise.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

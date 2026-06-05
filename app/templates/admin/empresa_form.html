@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}{% if empresa %}Editar Empresa{% else %}Nova Empresa{% endif %} — NEXO{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+  <a href="{{ url_for('admin.empresas') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="fw-bold mb-0">{{ 'Editar Empresa' if empresa else 'Nova Empresa' }}</h4>
+</div>
+
+<div class="card" style="max-width: 640px;">
+  <div class="card-body">
+    <form method="POST">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Nome Fantasia <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" name="nome_fantasia"
+                 value="{{ empresa.nome_fantasia if empresa }}" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Razão Social</label>
+          <input type="text" class="form-control" name="razao_social"
+                 value="{{ empresa.razao_social if empresa }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">CNPJ</label>
+          <input type="text" class="form-control" name="cnpj"
+                 value="{{ empresa.cnpj if empresa }}" placeholder="00.000.000/0000-00">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">E-mail de Contato</label>
+          <input type="email" class="form-control" name="email_contato"
+                 value="{{ empresa.email_contato if empresa }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Plano <span class="text-danger">*</span></label>
+          <select class="form-select" name="id_plano_atual" required>
+            {% for p in planos %}
+            <option value="{{ p.id }}"
+              {{ 'selected' if empresa and empresa.id_plano_atual == p.id }}>
+              {{ p.nome_plano }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Segmento</label>
+          <select class="form-select" name="id_segmento">
+            <option value="">— Selecione —</option>
+            {% for s in segmentos %}
+            <option value="{{ s.id }}"
+              {{ 'selected' if empresa and empresa.id_segmento == s.id }}>
+              {{ s.nome_segmento }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        {% if empresa %}
+        <div class="col-md-6">
+          <label class="form-label">Status da Conta</label>
+          <select class="form-select" name="status_conta">
+            {% for s in ['ATIVA', 'SUSPENSA', 'CANCELADA'] %}
+            <option value="{{ s }}" {{ 'selected' if empresa.status_conta == s }}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+      </div>
+      <hr>
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-lg"></i> {{ 'Salvar Alterações' if empresa else 'Criar Empresa' }}
+      </button>
+      <a href="{{ url_for('admin.empresas') }}" class="btn btn-outline-secondary ms-2">Cancelar</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

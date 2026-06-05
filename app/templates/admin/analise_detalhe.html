@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+{% block title %}Análise #{{ analise.id }} — NEXO Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+  <a href="{{ url_for('admin.analises') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="fw-bold mb-0">
+    Análise #{{ analise.id }} — {{ analise.empresa.nome_fantasia }}
+  </h4>
+  <span class="status-badge
+    {% if analise.status_analise == 'CONCLUIDO' %}bg-success
+    {% elif analise.status_analise == 'EM_ANALISE' %}bg-warning text-dark
+    {% elif analise.status_analise == 'RELATORIO_RECEBIDO' %}bg-info text-dark
+    {% else %}bg-secondary{% endif %}">
+    {{ analise.status_analise | replace('_', ' ') }}
+  </span>
+</div>
+
+<div class="row g-4">
+  <!-- Info básica -->
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Informações</div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-sm-5">Empresa</dt>
+          <dd class="col-sm-7">
+            <a href="{{ url_for('admin.empresa_detalhe', id=analise.empresa.id) }}">
+              {{ analise.empresa.nome_fantasia }}
+            </a>
+          </dd>
+          <dt class="col-sm-5">Período</dt>
+          <dd class="col-sm-7">{{ analise.periodo_label }}</dd>
+          <dt class="col-sm-5">Tipo</dt>
+          <dd class="col-sm-7">{{ analise.tipo_analise }}</dd>
+          <dt class="col-sm-5">Plano Ref.</dt>
+          <dd class="col-sm-7">{{ analise.plano_referencia.nome_plano }}</dd>
+          <dt class="col-sm-5">Responsável</dt>
+          <dd class="col-sm-7">{{ analise.admin_responsavel.nome }}</dd>
+          <dt class="col-sm-5">Criada em</dt>
+          <dd class="col-sm-7">{{ analise.data_criacao.strftime('%d/%m/%Y %H:%M') }}</dd>
+          {% if analise.data_conclusao %}
+          <dt class="col-sm-5">Concluída em</dt>
+          <dd class="col-sm-7">{{ analise.data_conclusao.strftime('%d/%m/%Y %H:%M') }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- Uploads -->
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header fw-semibold">Relatórios de PDV</div>
+      <div class="card-body">
+        {% for tipo, upload in [('VENDAS', upload_vendas), ('COMPRAS', upload_compras)] %}
+        <div class="border rounded p-3 mb-3">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <strong>{{ tipo }}</strong>
+              {% if upload %}
+                <span class="badge bg-success ms-2">Enviado</span>
+                <span class="badge
+                  {% if upload.status_processamento == 'PROCESSADO' %}bg-success
+                  {% elif upload.status_processamento == 'ERRO' %}bg-danger
+                  {% else %}bg-secondary{% endif %} ms-1">
+                  {{ upload.status_processamento }}
+                </span>
+                <div class="text-muted small mt-1">
+                  {{ upload.nome_arquivo_original }} —
+                  {{ '%.1f' % (upload.tamanho_bytes / 1024) }} KB
+                </div>
+              {% else %}
+                <span class="badge bg-secondary ms-2">Aguardando</span>
+              {% endif %}
+            </div>
+            {% if analise.status_analise not in ('EM_ANALISE', 'CONCLUIDO') %}
+            <form method="POST" action="{{ url_for('admin.analise_upload', id=analise.id) }}"
+                  enctype="multipart/form-data" class="d-flex align-items-center gap-2">
+              <input type="hidden" name="tipo_relatorio" value="{{ tipo }}">
+              <input type="file" class="form-control form-control-sm" name="arquivo"
+                     accept=".csv,.xlsx,.xls" required style="max-width:240px;">
+              <button type="submit" class="btn btn-sm btn-primary text-nowrap">
+                {{ 'Re-enviar' if upload else 'Enviar' }}
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+
+        <!-- Botão Processar (POST only) -->
+        {% if analise.status_analise == 'RELATORIO_RECEBIDO' %}
+        <form method="POST" action="{{ url_for('admin.analise_processar', id=analise.id) }}">
+          <button type="submit" class="btn btn-warning fw-semibold"
+                  onclick="return confirm('Iniciar processamento dos relatórios?')">
+            <i class="bi bi-play-circle"></i> Processar Agora
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  {% if analise.indicadores %}
+  {% set ind = analise.indicadores %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header fw-semibold">KPIs Gerados</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <div class="card kpi-card bg-light">
+              <div class="card-body">
+                <div class="kpi-label">Faturamento Total</div>
+                <div class="kpi-value">
+                  {% if ind.faturamento_total is not none %}
+                    R$ {{ '{:,.2f}'.format(ind.faturamento_total | float) }}
+                  {% else %}—{% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card kpi-card bg-light">
+              <div class="card-body">
+                <div class="kpi-label">Total Comprado</div>
+                <div class="kpi-value">
+                  {% if ind.total_comprado is not none %}
+                    R$ {{ '{:,.2f}'.format(ind.total_comprado | float) }}
+                  {% else %}—{% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card kpi-card bg-light">
+              <div class="card-body">
+                <div class="kpi-label">Pressão de Estoque (Valor Est.)</div>
+                <div class="kpi-value">
+                  {% if ind.saldo_estimado_compras_vendas is not none %}
+                    R$ {{ '{:,.2f}'.format(ind.saldo_estimado_compras_vendas | float) }}
+                  {% else %}<small class="text-muted">Indisponível</small>{% endif %}
+                </div>
+                <small class="text-muted">sem dados de custo confiáveis</small>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card kpi-card bg-light">
+              <div class="card-body">
+                <div class="kpi-label">Produto c/ Maior Saldo Parado</div>
+                <div class="kpi-value fs-6">{{ ind.produto_maior_saldo_parado_nome or '—' }}</div>
+                <small class="text-muted">
+                  {{ ind.saldo_estimado_parado | float | round(1) if ind.saldo_estimado_parado else '' }} un. estimadas
+                </small>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card bg-light">
+              <div class="card-body">
+                <div class="kpi-label">Produto Mais Vendido</div>
+                <strong>{{ ind.produto_mais_vendido_nome or '—' }}</strong>
+                <div class="text-muted small">
+                  {{ ind.produto_mais_vendido_quantidade | float | round(1) if ind.produto_mais_vendido_quantidade else '' }} un.
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card bg-light">
+              <div class="card-body">
+                <div class="kpi-label">Produto de Maior Faturamento</div>
+                <strong>{{ ind.produto_maior_faturamento_nome or '—' }}</strong>
+                <div class="text-muted small">
+                  {% if ind.produto_maior_faturamento_valor %}
+                    R$ {{ '{:,.2f}'.format(ind.produto_maior_faturamento_valor | float) }}
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card bg-light">
+              <div class="card-body">
+                <div class="kpi-label">Versão do Processamento</div>
+                <strong>v{{ ind.versao_processamento }}</strong>
+                <div class="text-muted small">{{ ind.data_geracao.strftime('%d/%m/%Y %H:%M') }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Relatório estratégico -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+        Relatório Estratégico
+        {% if analise.status_analise in ('EM_ANALISE', 'CONCLUIDO') %}
+        <a href="{{ url_for('admin.relatorio_editar', id=analise.id) }}"
+           class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-pencil"></i> {{ 'Editar Rascunho' if not analise.relatorio or not analise.relatorio.publicado else 'Ver / Editar' }}
+        </a>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        {% if analise.relatorio %}
+          {% set r = analise.relatorio %}
+          <div class="d-flex align-items-center gap-2 mb-3">
+            <h6 class="mb-0">{{ r.titulo }}</h6>
+            {% if r.publicado %}
+            <span class="badge bg-success">Publicado em {{ r.data_publicacao.strftime('%d/%m/%Y') }}</span>
+            {% else %}
+            <span class="badge bg-secondary">Rascunho</span>
+            {% endif %}
+          </div>
+          <div class="d-flex gap-2">
+            {% if not r.publicado and analise.status_analise == 'EM_ANALISE' %}
+            <form method="POST" action="{{ url_for('admin.analise_publicar', id=analise.id) }}">
+              <button type="submit" class="btn btn-success btn-sm"
+                      onclick="return confirm('Publicar e tornar visível para o cliente?')">
+                <i class="bi bi-send-check"></i> Publicar
+              </button>
+            </form>
+            {% endif %}
+            {% if r.publicado %}
+            <form method="POST" action="{{ url_for('admin.analise_despublicar', id=analise.id) }}">
+              <button type="submit" class="btn btn-outline-warning btn-sm"
+                      onclick="return confirm('Despublicar? A análise voltará para EM_ANALISE.')">
+                <i class="bi bi-arrow-counterclockwise"></i> Despublicar
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">
+            {% if analise.status_analise in ('EM_ANALISE', 'CONCLUIDO') %}
+            Nenhum relatório redigido ainda.
+            <a href="{{ url_for('admin.relatorio_editar', id=analise.id) }}">Criar agora.</a>
+            {% else %}
+            Processe os relatórios de PDV antes de redigir.
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
