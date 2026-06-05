@@ -23,7 +23,9 @@ def create_app():
     )
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['UPLOAD_FOLDER'] = os.path.join(app.instance_path, 'uploads')
-    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB
+    # Limite padrão de upload: 10 MB por arquivo (configurável via MAX_UPLOAD_MB).
+    max_upload_mb = int(os.environ.get('MAX_UPLOAD_MB', 10))
+    app.config['MAX_CONTENT_LENGTH'] = max_upload_mb * 1024 * 1024
 
     os.makedirs(app.instance_path, exist_ok=True)
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
