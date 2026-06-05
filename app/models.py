@@ -334,6 +334,8 @@ class ChamadoSuporte(db.Model):
         CheckConstraint("length(trim(descricao)) > 0", name='ck_chamado_descricao'),
         Index('ix_chamado_id_empresa', 'id_empresa'),
         Index('ix_chamado_id_usuario', 'id_usuario_cliente_autor'),
+        Index('idx_chamado_suporte_prioridade_atualizacao',
+              'status_chamado', 'prioridade_atendimento', 'data_atualizacao'),
     )
 
 
