@@ -43,7 +43,8 @@ with app.app_context():
     seg_nome = 'Tintas e Material de Pintura'
     if not Segmento.query.filter_by(nome_segmento=seg_nome).first():
         seg = Segmento(nome_segmento=seg_nome,
-                       descricao='Lojas de tintas, vernizes e materiais de pintura')
+                       descricao='Lojas de tintas, vernizes e materiais de pintura',
+                       ativo=True)
         db.session.add(seg)
         print(f"  Segmento criado: {seg_nome}")
 

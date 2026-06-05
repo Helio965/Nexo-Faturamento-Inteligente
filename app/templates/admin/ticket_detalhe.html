@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% block title %}Ticket #{{ chamado.id }} — NEXO Admin{% endblock %}
+{% block title %}Ticket #{{ chamado.id_chamado }} — NEXO Admin{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-4">
   <a href="{{ url_for('admin.tickets') }}" class="btn btn-sm btn-outline-secondary">
     <i class="bi bi-arrow-left"></i>
   </a>
-  <h4 class="fw-bold mb-0">Ticket #{{ chamado.id }}</h4>
+  <h4 class="fw-bold mb-0">Ticket #{{ chamado.id_chamado }}</h4>
   <span class="status-badge
     {% if chamado.status_chamado == 'ABERTO' %}bg-danger
     {% elif chamado.status_chamado == 'EM_ANDAMENTO' %}bg-warning text-dark
@@ -33,14 +33,18 @@
           <dt class="col-sm-5">Aberto por</dt>
           <dd class="col-sm-7">{{ chamado.cliente_autor.nome }}</dd>
           <dt class="col-sm-5">Aberto em</dt>
-          <dd class="col-sm-7">{{ chamado.data_criacao.strftime('%d/%m/%Y %H:%M') }}</dd>
+          <dd class="col-sm-7">{{ chamado.data_abertura.strftime('%d/%m/%Y %H:%M') }}</dd>
           <dt class="col-sm-5">Atualizado</dt>
           <dd class="col-sm-7">{{ chamado.data_atualizacao.strftime('%d/%m/%Y %H:%M') }}</dd>
+          {% if chamado.data_fechamento %}
+          <dt class="col-sm-5">Fechado em</dt>
+          <dd class="col-sm-7">{{ chamado.data_fechamento.strftime('%d/%m/%Y %H:%M') }}</dd>
+          {% endif %}
         </dl>
 
         <hr>
         <p class="fw-semibold small mb-2">Alterar Status</p>
-        <form method="POST" action="{{ url_for('admin.ticket_status', id=chamado.id) }}">
+        <form method="POST" action="{{ url_for('admin.ticket_status', id=chamado.id_chamado) }}">
           <div class="d-flex gap-2">
             <select class="form-select form-select-sm" name="status_chamado">
               {% for s in ['ABERTO', 'EM_ANDAMENTO', 'RESPONDIDO', 'RESOLVIDO'] %}
@@ -74,14 +78,14 @@
             </div>
             <div style="white-space:pre-wrap;">{{ msg.conteudo }}</div>
             <div class="small mt-1 {% if msg.autor.is_admin %}text-white-50{% else %}text-muted{% endif %}">
-              {{ msg.data_criacao.strftime('%d/%m/%Y %H:%M') }}
+              {{ msg.data_envio.strftime('%d/%m/%Y %H:%M') }}
             </div>
           </div>
         </div>
         {% endfor %}
       </div>
       <div class="card-footer">
-        <form method="POST" action="{{ url_for('admin.ticket_mensagem', id=chamado.id) }}">
+        <form method="POST" action="{{ url_for('admin.ticket_mensagem', id=chamado.id_chamado) }}">
           <div class="d-flex gap-2">
             <textarea class="form-control" name="conteudo" rows="2"
                       placeholder="Responder…" required></textarea>

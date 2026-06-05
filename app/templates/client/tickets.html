@@ -38,7 +38,7 @@
       <tbody>
         {% for c in chamados %}
         <tr>
-          <td class="text-muted small">{{ c.id }}</td>
+          <td class="text-muted small">{{ c.id_chamado }}</td>
           <td>{{ c.assunto }}</td>
           <td><span class="priority-{{ c.prioridade_atendimento }}">{{ c.prioridade_atendimento }}</span></td>
           <td>
@@ -52,7 +52,7 @@
           </td>
           <td class="text-muted small">{{ c.data_atualizacao.strftime('%d/%m/%Y %H:%M') }}</td>
           <td>
-            <a href="{{ url_for('client.ticket_detalhe', id=c.id) }}"
+            <a href="{{ url_for('client.ticket_detalhe', id=c.id_chamado) }}"
                class="btn btn-sm btn-outline-primary">Abrir</a>
           </td>
         </tr>

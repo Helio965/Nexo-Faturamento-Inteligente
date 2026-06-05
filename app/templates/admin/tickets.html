@@ -54,7 +54,7 @@
       <tbody>
         {% for t in tickets %}
         <tr>
-          <td class="text-muted small">{{ t.id }}</td>
+          <td class="text-muted small">{{ t.id_chamado }}</td>
           <td>{{ t.empresa.nome_fantasia }}</td>
           <td>{{ t.assunto }}</td>
           <td>
@@ -72,9 +72,9 @@
               {{ t.status_chamado | replace('_', ' ') }}
             </span>
           </td>
-          <td class="text-muted small">{{ t.data_criacao.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td class="text-muted small">{{ t.data_abertura.strftime('%d/%m/%Y %H:%M') }}</td>
           <td>
-            <a href="{{ url_for('admin.ticket_detalhe', id=t.id) }}"
+            <a href="{{ url_for('admin.ticket_detalhe', id=t.id_chamado) }}"
                class="btn btn-sm btn-outline-primary">Abrir</a>
           </td>
         </tr>

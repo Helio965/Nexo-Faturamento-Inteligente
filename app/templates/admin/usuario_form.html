@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-4">
-  <a href="{{ url_for('admin.empresa_detalhe', id=empresa.id) }}" class="btn btn-sm btn-outline-secondary">
+  <a href="{{ url_for('admin.empresa_detalhe', id=empresa.id_empresa) }}" class="btn btn-sm btn-outline-secondary">
     <i class="bi bi-arrow-left"></i>
   </a>
   <h4 class="fw-bold mb-0">Novo Usuário — {{ empresa.nome_fantasia }}</h4>

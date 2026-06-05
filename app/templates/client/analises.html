@@ -33,7 +33,7 @@
             {{ a.relatorio.data_publicacao.strftime('%d/%m/%Y') if a.relatorio and a.relatorio.data_publicacao else '—' }}
           </td>
           <td>
-            <a href="{{ url_for('client.analise_detalhe', id=a.id) }}"
+            <a href="{{ url_for('client.analise_detalhe', id=a.id_analise) }}"
                class="btn btn-sm btn-outline-primary">Ver Análise</a>
           </td>
         </tr>

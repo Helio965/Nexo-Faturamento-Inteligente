@@ -8,7 +8,7 @@
   </a>
   <h4 class="fw-bold mb-0">{{ empresa.nome_fantasia }}</h4>
   <span class="status-badge badge-{{ empresa.status_conta }}">{{ empresa.status_conta }}</span>
-  <a href="{{ url_for('admin.empresa_editar', id=empresa.id) }}"
+  <a href="{{ url_for('admin.empresa_editar', id=empresa.id_empresa) }}"
      class="btn btn-sm btn-outline-primary ms-auto">
     <i class="bi bi-pencil"></i> Editar
   </a>
@@ -27,6 +27,16 @@
           <dd class="col-sm-7">{{ empresa.cnpj or '—' }}</dd>
           <dt class="col-sm-5">E-mail</dt>
           <dd class="col-sm-7">{{ empresa.email_contato or '—' }}</dd>
+          <dt class="col-sm-5">Telefone</dt>
+          <dd class="col-sm-7">{{ empresa.telefone_contato or '—' }}</dd>
+          <dt class="col-sm-5">Contratação</dt>
+          <dd class="col-sm-7">{{ empresa.data_contratacao.strftime('%d/%m/%Y') if empresa.data_contratacao else '—' }}</dd>
+          <dt class="col-sm-5">Fat. Base Mensal</dt>
+          <dd class="col-sm-7">
+            {% if empresa.faturamento_base_mensal %}
+              R$ {{ '{:,.2f}'.format(empresa.faturamento_base_mensal | float) }}
+            {% else %}—{% endif %}
+          </dd>
           <dt class="col-sm-5">Plano</dt>
           <dd class="col-sm-7">
             <span class="badge
@@ -50,7 +60,7 @@
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
         Usuários
-        <a href="{{ url_for('admin.usuario_novo', id_empresa=empresa.id) }}"
+        <a href="{{ url_for('admin.usuario_novo', id_empresa=empresa.id_empresa) }}"
            class="btn btn-sm btn-primary">
           <i class="bi bi-person-plus"></i> Novo Usuário
         </a>
@@ -70,7 +80,7 @@
                 {% else %}<span class="badge bg-secondary">Não</span>{% endif %}
               </td>
               <td>
-                <form method="POST" action="{{ url_for('admin.usuario_toggle', id=u.id) }}"
+                <form method="POST" action="{{ url_for('admin.usuario_toggle', id=u.id_usuario) }}"
                       class="d-inline">
                   <button type="submit" class="btn btn-sm btn-outline-{{ 'danger' if u.ativo else 'success' }}">
                     {{ 'Desativar' if u.ativo else 'Ativar' }}
@@ -119,7 +129,7 @@
                 </span>
               </td>
               <td>
-                <a href="{{ url_for('admin.analise_detalhe', id=a.id) }}"
+                <a href="{{ url_for('admin.analise_detalhe', id=a.id_analise) }}"
                    class="btn btn-sm btn-outline-primary">Ver</a>
               </td>
             </tr>

@@ -27,7 +27,7 @@
       <tbody>
         {% for a in analises %}
         <tr>
-          <td class="text-muted small">{{ a.id }}</td>
+          <td class="text-muted small">{{ a.id_analise }}</td>
           <td>{{ a.empresa.nome_fantasia }}</td>
           <td>{{ a.periodo_label }}</td>
           <td><span class="badge bg-light text-dark border">{{ a.tipo_analise }}</span></td>
@@ -43,7 +43,7 @@
           </td>
           <td class="text-muted small">{{ a.data_criacao.strftime('%d/%m/%Y') }}</td>
           <td>
-            <a href="{{ url_for('admin.analise_detalhe', id=a.id) }}"
+            <a href="{{ url_for('admin.analise_detalhe', id=a.id_analise) }}"
                class="btn btn-sm btn-outline-primary">Ver</a>
           </td>
         </tr>
