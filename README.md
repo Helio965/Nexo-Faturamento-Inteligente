@@ -1,5 +1,11 @@
 # NEXO — Faturamento Inteligente
 
+[![Assista ao vídeo promocional do NEXO](static/video/nexo_demo_preview.gif)](static/video/nexo_demo_motion.mp4)
+
+▶️ [Assistir ao vídeo promocional completo](static/video/nexo_demo_motion.mp4)
+
+*Os valores e indicadores apresentados no vídeo são ilustrativos.*
+
 **Plataforma de Engenharia de Dados e Business Intelligence para o varejo de micro e pequenas empresas.**
 
 | | |
@@ -174,6 +180,20 @@ nexo_mvp/
 | Front-end | Bootstrap 5 + Plotly.js (via CDN) |
 
 Lista completa e versões exatas em [`requirements.txt`](requirements.txt).
+
+---
+
+## 🎬 Produção audiovisual
+
+O código-fonte do vídeo está em [`tools/nexo-motion/`](tools/nexo-motion/), isolado da aplicação Flask. Com Node.js e npm instalados, renderize novamente a partir da raiz do repositório:
+
+```bash
+cd tools/nexo-motion
+npm ci
+npm run render
+```
+
+O MP4, a prévia GIF e a capa ficam em [`static/video/`](static/video/). O vídeo pode ser assistido sem login na seção **Demonstração** da página inicial pública, com controles nativos e opção de download. Consulte o [README da produção](tools/nexo-motion/README.md) para os requisitos de renderização.
 
 ---
 

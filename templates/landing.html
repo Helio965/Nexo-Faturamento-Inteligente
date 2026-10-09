@@ -391,6 +391,34 @@
       </p>
     </div>
 
+    <figure class="motion-demo" aria-labelledby="motion-demo-title">
+      <div class="motion-demo-intro">
+        <h3 id="motion-demo-title">Conheça o NEXO em movimento</h3>
+        <p>Descubra como dados comerciais se transformam em indicadores e decisões estratégicas.</p>
+      </div>
+      <div class="motion-demo-frame">
+        <video
+          class="motion-demo-video"
+          controls
+          playsinline
+          preload="metadata"
+          width="1920"
+          height="1080"
+          poster="{{ url_for('static', filename='video/nexo_demo_poster.png') }}"
+          aria-label="Vídeo promocional do NEXO — Faturamento Inteligente"
+          aria-describedby="motion-demo-caption"
+        >
+          <source src="{{ url_for('static', filename='video/nexo_demo_motion.mp4') }}" type="video/mp4" />
+          Seu navegador não suporta reprodução de vídeo.
+          <a href="{{ url_for('static', filename='video/nexo_demo_motion.mp4') }}" download>Baixe o vídeo completo em MP4.</a>
+        </video>
+      </div>
+      <figcaption id="motion-demo-caption" class="motion-demo-caption">
+        <span>Os valores e indicadores apresentados no vídeo são dados ilustrativos.</span>
+        <a href="{{ url_for('static', filename='video/nexo_demo_motion.mp4') }}" download>Baixar vídeo em MP4</a>
+      </figcaption>
+    </figure>
+
     <div class="dashboard-demo">
       <div class="demo-head">
         <div class="demo-head-title">

@@ -436,6 +436,36 @@ section { padding: 96px 0; position: relative; }
 /* ============================================================
    11. Demonstração do dashboard
    ============================================================ */
+.motion-demo { margin: 0 0 40px; }
+.motion-demo-intro { margin-bottom: 18px; }
+.motion-demo-intro h3 { margin-bottom: 8px; }
+.motion-demo-intro p { margin: 0; }
+.motion-demo-frame {
+  overflow: hidden;
+  background: var(--nexo-bg);
+  border: 1px solid var(--nexo-border-strong);
+  border-radius: var(--nexo-radius);
+  box-shadow: var(--nexo-shadow-lg);
+}
+.motion-demo-video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+}
+.motion-demo-caption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 20px;
+  margin-top: 12px;
+  color: var(--nexo-text-2);
+  font-size: 0.82rem;
+}
+.motion-demo-caption a { color: var(--nexo-accent); text-decoration: underline; }
+.motion-demo-caption a:hover { color: var(--nexo-text); }
+
 .dashboard-demo {
   background: var(--nexo-surface);
   border: 1px solid var(--nexo-border-strong);
