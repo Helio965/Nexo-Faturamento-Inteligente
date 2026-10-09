@@ -25,6 +25,7 @@ from sqlalchemy import select
 
 from extensions import db
 from models import GuiaTopico
+from navegacao_bot import DESTINOS, acao_navegacao, analisar_navegacao, identificar_destinos
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ def _quer_humano(mensagem: str) -> bool:
     return any(p in n for p in ("chamado", "humano", "atendente", "suporte", "pessoa", "falar com"))
 
 
-def _responder_local(mensagem: str) -> str:
+def _responder_local(mensagem: str, destino: str | None = None) -> str:
     """Fallback determinístico — sempre responde algo útil, lendo do banco."""
     if _quer_humano(mensagem):
         return ("Posso te ajudar com dúvidas do portal por aqui. 🙂 Se preferir falar "
@@ -112,7 +113,11 @@ def _responder_local(mensagem: str) -> str:
     topicos = _carregar_topicos()
     topico, score = _melhor_topico(mensagem, topicos)
     if topico and score >= 1:
-        return f"**{topico['pergunta']}**\n\n{topico['resposta']}"
+        assunto = f"{topico['pergunta']} {topico['categoria']}"
+        if not destino or destino in identificar_destinos(assunto):
+            return f"**{topico['pergunta']}**\n\n{topico['resposta']}"
+    if destino:
+        return DESTINOS[destino].orientacao
     if _saudacao(mensagem):
         cats = sorted({t["categoria"] for t in topicos})
         ajuda = ", ".join(cats) if cats else "uso do portal"
@@ -173,16 +178,30 @@ def _responder_hf(mensagem: str) -> str | None:
         return None
 
 
-def responder(mensagem: str) -> dict:
+def responder(mensagem: str, ultimo_destino: str | None = None) -> dict:
     """
-    Resposta do NexoBot. Retorna {'resposta': str, 'fonte': 'hf'|'local'}.
-    Sempre entrega algo útil (fallback determinístico).
+    Preserva resposta/fonte e acrescenta uma ação local validada quando cabível.
+    O endpoint verifica a autorização antes de chamar esta função.
     """
-    mensagem = (mensagem or "").strip()
+    mensagem = mensagem.strip()[:1000] if isinstance(mensagem, str) else ""
+    resultado = {"resposta": "", "fonte": "local", "acao": None, "destino": None}
     if not mensagem:
-        return {"resposta": "Pode escrever sua dúvida sobre o portal que eu te ajudo. 🙂", "fonte": "local"}
+        resultado["resposta"] = "Pode escrever sua dúvida sobre o portal que eu te ajudo. 🙂"
+        return resultado
+
+    intencao = analisar_navegacao(mensagem, ultimo_destino)
+    if intencao.tipo == "navegar":
+        resultado.update(acao_navegacao("navegar", intencao.destino))
+        return resultado
+    if intencao.resposta:
+        resultado["resposta"] = intencao.resposta
+        return resultado
 
     via_hf = _responder_hf(mensagem)
     if via_hf:
-        return {"resposta": via_hf, "fonte": "hf"}
-    return {"resposta": _responder_local(mensagem), "fonte": "local"}
+        resultado.update(resposta=via_hf, fonte="hf")
+    else:
+        resultado["resposta"] = _responder_local(mensagem, intencao.destino)
+    if intencao.destino:
+        resultado.update(acao_navegacao("sugerir_navegacao", intencao.destino))
+    return resultado
