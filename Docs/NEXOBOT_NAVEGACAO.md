@@ -34,6 +34,16 @@ Menções e hipóteses como “Se eu disser abra o histórico, isso vai funciona
 
 O reconhecimento permanece conservador: uma negação em uma mensagem direta impede a navegação. Uma pergunta anterior ao comando mantém o tratamento informativo ou pede esclarecimento. Frases complexas que não tenham destino inequívoco devem ser reformuladas; a IA não completa o catálogo de páginas.
 
+### Expressões contextuais com tratamento
+
+“Eu quero que você me leve para lá”, “NexoBot, me leva pra lá”, “Ah, me leva pra lá”, “Opa, pode abrir aquela página?” e “Por favor, NexoBot, me direcione para lá” usam o último destino válido. A checagem continua dependendo de uma intenção real de navegação, sem explicação, botão ou confirmação intermediária.
+
+A função `_comando_contextual()` preserva a lista estrita de palavras do pedido. Acrescenta somente `eu` e `voces` à gramática e aceita `ah`, `opa`, `ei`, `bom`, `nexobot`, `bot` e `assistente` antes do primeiro verbo de navegação. Um vocativo no final precisa estar separado por vírgula, como “Me leva pra lá, NexoBot, por favor”. A locução completa “por gentileza” equivale a “por favor”; palavras desconhecidas não são descartadas. “Me leve para assistente” e “Me leva para o local do bot” continuam pedindo esclarecimento.
+
+Perguntas, relatos, negações e hipóteses mantêm os guards anteriores. O guard de hipóteses também reconhece “Se eu falar…”, inclusive quando a fala citada contém um destino explícito. Um novo destino explícito continua prevalecendo sobre o contexto anterior. Sem contexto válido ou depois de sua invalidação, não há recuperação de destinos antigos.
+
+Limites: os verbos de comando reconhecidos não foram ampliados. Tratamentos no meio do pedido ou vocativos finais sem a vírgula delimitadora podem exigir reformulação. A correção não remove palavras desconhecidas nem utiliza “lá” sozinho para inferir uma ordem.
+
 ## Testes
 
 Na raiz do checkout, com as dependências existentes instaladas:
@@ -65,3 +75,17 @@ Uma revisão independente executou mais 27 sondagens do parser com assertions, t
 Limites: o navegador foi validado em um servidor Flask isolado, sem deploy externo ou dados reais. O proxy do ambiente bloqueia alguns CDNs; nos testes foram usados assets Bootstrap/Plotly/Socket.IO em cache obtidos com TLS verificado, preservando a integridade quando declarada. O bloqueio de Google Fonts é preexistente. Não foi feita chamada real à Hugging Face: ausência de token e indisponibilidade simulada foram testadas, e a integração opcional permaneceu intacta.
 
 Somente o reconhecimento em `navegacao_bot.py`, os testes e esta documentação foram alterados. API, respostas do Guia/HF, frontend, CSS, autenticação, modelos, migrations, ETL, dashboards e landing permanecem sem alterações.
+
+## Validação final contextual — 9 de outubro de 2026
+
+HEAD inicial e `main` confirmados: `be7dc3f6f1da5f88f420f787727fb72ee77c3006`; checkout inicialmente limpo, sem alterações posteriores no remoto.
+
+- Baseline: 57 de 57 testes aprovados.
+- Regressões contra o parser original: 76 métodos, 65 aprovados e 11 reprovados; 44 falhas de subtestes e zero erros. Os casos A–E falhavam no parser e na API.
+- Após a correção: 76 de 76 testes aprovados, zero falhas, erros ou testes ignorados. Foram acrescentados 19 métodos; os 57 métodos e helpers anteriores permaneceram idênticos por comparação AST.
+
+Os novos testes incluem os cinco pedidos contextuais, conversas completas de upload e histórico, tratamento/educação em posições delimitadas, prioridade do destino explícito, perguntas com botão, negações, hipóteses, contexto ausente/inválido/isolado, palavras desconhecidas e bloqueios de operações, URLs externas e ADMIN. Os testes usam SQLite e uploads temporários. A navegação funciona sem token de Hugging Face, sem alterar o contrato JSON ou o frontend.
+
+Chromium/Playwright passou 38 de 38 verificações em 1440 e 390 px, sem falhas ou exceções JavaScript. Os cinco fluxos solicitados passaram: pergunta de upload → “Eu quero que você me leve para lá”; pergunta de histórico → “Ah, NexoBot, me leva pra lá”; dashboard direto com vocativo; Guia informativo com botão, sem navegação; e negação com vocativo. O painel fechou antes dos redirecionamentos, sem texto intermediário. As cinco páginas CLIENTE retornaram 200 e ADMIN permaneceu bloqueado com 403. Contexto, falhas da API, sessão expirada, concorrência, página já aberta e menu mobile passaram; as contagens das 13 tabelas temporárias ficaram iguais.
+
+O diff foi revisado e restrito aos três arquivos desta funcionalidade. Os componentes protegidos mantiveram diff vazio contra o HEAD inicial; `git diff --check` passou. A validação continua local, com SQLite temporário, sem deploy externo nem chamada real à Hugging Face. Os limites de CDN/cache verificado descritos na validação anterior também se aplicam a esta execução.

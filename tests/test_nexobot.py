@@ -736,6 +736,229 @@ class NexoBotTestCase(unittest.TestCase):
                 usuario.ativo = True
                 self.db.session.commit()
 
+    def test_contexto_natural_a_pronome_pessoal(self):
+        self.assert_parser_e_api(
+            "Eu quero que você me leve para lá.", "upload", contexto="upload",
+        )
+
+    def test_contexto_natural_b_vocativo(self):
+        self.assert_parser_e_api(
+            "NexoBot, me leva pra lá.", "dashboard", contexto="dashboard",
+        )
+
+    def test_contexto_natural_c_interjeicao(self):
+        self.assert_parser_e_api("Ah, me leva pra lá.", "historico", contexto="historico")
+
+    def test_contexto_natural_d_coloquial(self):
+        self.assert_parser_e_api(
+            "Opa, pode me levar para aquela página?", "guia", contexto="guia",
+        )
+
+    def test_contexto_natural_e_pedido_educado(self):
+        self.assert_parser_e_api(
+            "Por favor, NexoBot, me direcione para lá.", "suporte", contexto="suporte",
+        )
+
+    def test_contexto_natural_conversa_completa_upload_e_historico(self):
+        for pergunta, comando, destino in (
+            (
+                "Onde envio as planilhas de compras e vendas?",
+                "Ah, NexoBot, eu quero que você me leve para lá.", "upload",
+            ),
+            (
+                "Onde ficam minhas análises anteriores?",
+                "Eu quero ir para essa página, por favor.", "historico",
+            ),
+        ):
+            with self.subTest(pergunta=pergunta):
+                dados = self.perguntar(pergunta)
+                self.assert_destino(dados, destino, "sugerir_navegacao")
+                contexto = dados["destino"]
+                self.assert_parser_e_api(comando, destino, contexto=contexto)
+
+    def test_contexto_natural_vocativos_interjeicoes_e_educacao(self):
+        for mensagem in (
+            "Bot, me leva pra lá.",
+            "Assistente, pode abrir aquela tela?",
+            "Ei, me leva para essa página.",
+            "Bom, eu quero acessar essa parte.",
+            "Por gentileza, me direcione para aquele lugar.",
+            "NexoBot, você poderia me levar até ali?",
+            "Opa, por favor, me coloca nessa aba.",
+            "Me leva pra lá, NexoBot, por favor.",
+            "Ah, assistente, por gentileza, pode me direcionar?",
+            "EU QUERO QUE VOCÊ ME LEVE PARA LÁ!",
+        ):
+            self.assert_parser_e_api(mensagem, "guia", contexto="guia")
+
+    def test_contexto_natural_sem_destino_valido_pede_esclarecimento(self):
+        from navegacao_bot import analisar_navegacao
+
+        for contexto in (None, "", "admin", "/cliente/upload", "https://example.com", "inexistente"):
+            for mensagem in (
+                "Eu quero que você me leve para lá.",
+                "NexoBot, me leva pra lá.",
+                "Ah, me leva pra lá.",
+                "Opa, pode me levar para aquela página?",
+                "Por favor, NexoBot, me direcione para lá.",
+            ):
+                with self.subTest(camada="parser", contexto=contexto, mensagem=mensagem):
+                    intencao = analisar_navegacao(mensagem, contexto)
+                    self.assertEqual(intencao.tipo, "esclarecer")
+                    self.assertIsNone(intencao.destino)
+                with self.subTest(camada="api", contexto=contexto, mensagem=mensagem):
+                    self.assert_sem_acao(self.perguntar(mensagem, contexto))
+
+    def test_contexto_natural_destino_explicito_tem_prioridade(self):
+        for mensagem, destino in (
+            ("NexoBot, me leva para o histórico.", "historico"),
+            ("Ah, eu quero acessar meu dashboard.", "dashboard"),
+            ("Por favor, me direcione para o Guia.", "guia"),
+            ("Opa, quero ir para o suporte.", "suporte"),
+            ("Eu quero que você me leve para o upload.", "upload"),
+        ):
+            self.assert_parser_e_api(mensagem, destino, contexto="guia")
+
+    def test_contexto_natural_perguntas_com_destino_preservam_botao(self):
+        for mensagem, destino in (
+            ("Onde faço upload de compras e vendas?", "upload"),
+            ("NexoBot, como faço para acessar meu dashboard?", "dashboard"),
+            ("Ah, existe uma página para consultar minhas análises anteriores?", "historico"),
+            ("Você pode me explicar onde fica a área de suporte?", "suporte"),
+        ):
+            self.assert_parser_e_api(mensagem, destino, "sugerir_navegacao", contexto="guia")
+
+    def test_contexto_natural_negacoes_nao_navegam(self):
+        from navegacao_bot import analisar_navegacao
+
+        for mensagem in (
+            "Ah, eu não quero ir para o upload.",
+            "NexoBot, não me leve para lá.",
+            "Por gentileza, não abra aquela página.",
+        ):
+            with self.subTest(camada="parser", mensagem=mensagem):
+                self.assertEqual(analisar_navegacao(mensagem, "upload").tipo, "negada")
+            with self.subTest(camada="api", mensagem=mensagem):
+                self.assert_sem_acao(self.perguntar(mensagem, "upload"))
+
+    def test_contexto_natural_perguntas_e_relatos_sem_ordem_nao_navegam(self):
+        from navegacao_bot import analisar_navegacao
+
+        for mensagem in (
+            "Eu estava naquela página ontem.",
+            "NexoBot, o que aconteceu lá?",
+            "O que aconteceu lá ontem?",
+            "NexoBot, você pode explicar o que tem naquela página?",
+            "Você pode explicar como funciona aquela página?",
+            "Eu quero saber o que existe nessa área.",
+            "Ah, NexoBot!",
+        ):
+            with self.subTest(camada="parser", mensagem=mensagem):
+                self.assertNotEqual(analisar_navegacao(mensagem, "upload").tipo, "navegar")
+            with self.subTest(camada="api", mensagem=mensagem):
+                dados = self.perguntar(mensagem, "upload")
+                self.assertNotEqual(dados.get("acao"), "navegar")
+                self.assertTrue(dados["resposta"].strip())
+                if dados.get("destino"):
+                    self.assertIn(dados["destino"], self.ENDPOINTS)
+
+    def test_contexto_natural_hipoteses_nao_navegam(self):
+        from navegacao_bot import analisar_navegacao
+
+        for mensagem in (
+            'Se eu falar "me leve para lá", você vai me direcionar?',
+            'Se eu falar "me leve para o dashboard", você vai me direcionar?',
+            'NexoBot, se eu disser "me leva pra lá", o que acontece?',
+            'Ah, caso eu escreva "abra aquela página", isso vai funcionar?',
+        ):
+            with self.subTest(camada="parser", mensagem=mensagem):
+                self.assertNotEqual(analisar_navegacao(mensagem, "upload").tipo, "navegar")
+            with self.subTest(camada="api", mensagem=mensagem):
+                self.assertNotEqual(self.perguntar(mensagem, "upload").get("acao"), "navegar")
+
+    def test_contexto_natural_nao_descarta_substantivos_desconhecidos(self):
+        from navegacao_bot import analisar_navegacao
+
+        for mensagem in (
+            "NexoBot, me leva para uma página que não existe.",
+            "Ah, me leva para controle de estoque físico.",
+            "Opa, abre essa página de cobrança fiscal.",
+            "Eu quero ir para aquele módulo extraterrestre.",
+            "Por gentileza, me leve para lá estoque.",
+            "Me leva para o local do bot.",
+            "Me leve para assistente.",
+        ):
+            with self.subTest(camada="parser", mensagem=mensagem):
+                self.assertNotEqual(analisar_navegacao(mensagem, "upload").tipo, "navegar")
+            with self.subTest(camada="api", mensagem=mensagem):
+                self.assert_sem_acao(self.perguntar(mensagem, "upload"))
+
+    def test_contexto_natural_nao_e_compartilhado_entre_usuarios(self):
+        dados = self.perguntar("Onde faço upload de compras e vendas?")
+        self.assert_destino(dados, "upload", "sugerir_navegacao")
+        self.assert_parser_e_api("Ah, me leva pra lá.", "upload", contexto=dados["destino"])
+        outro = self.app.test_client()
+        token = self.login(outro, "outro")
+        resposta = self.post("Ah, NexoBot, me leva pra lá.", client=outro, token=token)
+        self.assertEqual(resposta.status_code, 200)
+        self.assert_sem_acao(resposta.get_json())
+
+    def test_contexto_natural_invalidado_nao_recupera_destino_antigo(self):
+        dados = self.perguntar("Onde fica o upload?")
+        self.assert_destino(dados, "upload", "sugerir_navegacao")
+        self.assert_parser_e_api(
+            "NexoBot, me leva pra lá.", "upload", contexto=dados["destino"],
+        )
+        # O widget envia só o último identificador atual; não existe um
+        # histórico persistente no backend para recuperar o destino anterior.
+        self.assert_sem_acao(self.perguntar("Ah, NexoBot, me leva pra lá.", None))
+        self.assert_sem_acao(self.perguntar("Ah, NexoBot, me leva pra lá.", "inexistente"))
+
+    def test_contexto_natural_preserva_bloqueio_de_operacoes(self):
+        from models import Analise, ChamadoSuporte, Notificacao, Usuario
+        from navegacao_bot import analisar_navegacao
+
+        modelos = (Analise, ChamadoSuporte, Notificacao, Usuario)
+        antes = {modelo: self.count(modelo) for modelo in modelos}
+        for mensagem in (
+            "NexoBot, exclua minhas análises.",
+            "Eu quero que você envie meus relatórios automaticamente.",
+            "Crie um chamado para mim sem abrir a página.",
+            "Publique meus relatórios.",
+            "Execute o processamento ETL.",
+            "Ah, NexoBot, execute o ETL e me leve para lá.",
+        ):
+            with self.subTest(camada="parser", mensagem=mensagem):
+                self.assertEqual(analisar_navegacao(mensagem, "upload").tipo, "operacao")
+            with self.subTest(camada="api", mensagem=mensagem):
+                self.assert_sem_acao(self.perguntar(mensagem, "upload"))
+        self.assertEqual({modelo: self.count(modelo) for modelo in modelos}, antes)
+        self.assertFalse(any(Path(self.temp.name, "uploads").rglob("*")))
+
+    def test_contexto_natural_preserva_bloqueio_de_urls_e_admin(self):
+        from navegacao_bot import analisar_navegacao
+
+        for mensagem in (
+            "NexoBot, me leve para https://example.com.",
+            "Ah, abra javascript:alert(1).",
+            "Opa, me leve para //example.com/upload.",
+            "Por favor, abra o painel de administração.",
+            "Eu quero que você me leve para /admin/dashboard.",
+        ):
+            with self.subTest(camada="parser", mensagem=mensagem):
+                self.assertEqual(analisar_navegacao(mensagem, "upload").tipo, "bloqueada")
+            with self.subTest(camada="api", mensagem=mensagem):
+                self.assert_sem_acao(self.perguntar(mensagem, "upload"))
+
+    def test_contexto_natural_nao_depende_de_hugging_face(self):
+        self.app.config["HF_API_TOKEN"] = "token-ficticio-de-teste"
+        with patch("suporte_bot._responder_hf", side_effect=AssertionError("IA não deve definir rotas")) as hf:
+            self.assert_parser_e_api(
+                "Ah, NexoBot, eu quero que você me leve para lá.", "upload", contexto="upload",
+            )
+            self.assert_parser_e_api("Opa, pode abrir aquela página?", "guia", contexto="guia")
+            hf.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

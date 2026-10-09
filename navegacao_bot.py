@@ -95,7 +95,7 @@ _INFORMATIVA = re.compile(
 # O guard considera somente o texto anterior ao comando, para manter
 # pedidos como "Abra o Guia para ver um exemplo" como navegação direta.
 _COMANDO_CITADO = re.compile(
-    r"\b(?:se|caso) (?:eu |voce |alguem )?(?:disser|digitar|escrever|pedir)\b|"
+    r"\b(?:se|caso) (?:eu |voce |alguem )?(?:disser|falar|digitar|escrever|pedir)\b|"
     r"\b(?:voce|vc|o bot|nexobot) (?:disse|respondeu|falou|escreveu)\b|"
     r"\b(?:frase|expressao|exemplo|comando)\b"
 )
@@ -125,12 +125,17 @@ _OPERACAO = re.compile(
 # dessa gramática (ex.: "estoque físico") nunca reutilizam um destino antigo.
 _CONTEXTO_PALAVRAS = set(
     "entao agora ja sim por favor obrigado obrigada pode poderia consegue conseguiria "
-    "quero queria gostaria preciso desejo de que voce vc me mim leve leva levar "
+    "eu quero queria gostaria preciso desejo de que voce voces vc me mim leve leva levar "
     "direcione direciona direcionar redirecione redireciona redirecionar mande manda "
     "mandar coloca coloque colocar ponha abre abra abrir acesse acessa acessar "
     "vai va ir entrar entre ver consultar voltar navegar para pra pro ate a ao em "
     "na no o essa esse esta este nessa nesse nesta neste aquela aquele naquela naquele pagina tela local parte aba lugar "
     "secao la ali aqui".split()
+)
+_CONTEXTO_ABERTURA = {"ah", "opa", "ei", "bom", "nexobot", "bot", "assistente"}
+_VOCATIVO_FINAL = re.compile(
+    r",\s*(?:nexobot|bot|assistente)(?:\s*,\s*por\s+(?:favor|gentileza))?\s*[.!?]*\s*$",
+    re.IGNORECASE,
 )
 _PREFIXO_DESTINO = set(
     "para pra pro ate a ao o os as na no em de da do das dos meu minha meus minhas "
@@ -198,6 +203,17 @@ def _desejo_de_tarefa(operacao: re.Match, texto: str) -> bool:
     )
 
 
+def _comando_contextual(mensagem: str, comando: re.Match) -> bool:
+    """Aceita tratamentos delimitados, preservando a gramática estrita do pedido."""
+    texto = normalizar(_VOCATIVO_FINAL.sub("", mensagem))
+    prefixo = texto[:comando.start()].replace("por gentileza", "por favor")
+    pedido = texto[comando.start():].replace("por gentileza", "por favor")
+    # Vocativos/interjeições só antes do verbo, ou no sufixo com vírgula.
+    # "Me leve para assistente" continua sendo um destino desconhecido.
+    return (set(prefixo.split()) <= (_CONTEXTO_PALAVRAS | _CONTEXTO_ABERTURA)
+            and set(pedido.split()) <= _CONTEXTO_PALAVRAS)
+
+
 @dataclass(frozen=True)
 class Intencao:
     tipo: str
@@ -249,7 +265,7 @@ def analisar_navegacao(mensagem: str, ultimo_destino=None) -> Intencao:
     if destinos:
         return Intencao("navegar" if direta else "informar", destino=destinos[0])
     if direta:
-        contextual = set(texto.split()) <= _CONTEXTO_PALAVRAS
+        contextual = _comando_contextual(mensagem, comando)
         destino = validar_destino(ultimo_destino) if contextual else None
         if destino:
             return Intencao("navegar", destino=destino)
