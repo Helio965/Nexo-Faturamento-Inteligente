@@ -485,6 +485,257 @@ class NexoBotTestCase(unittest.TestCase):
                 if dados.get("destino"):
                     self.assertIn(dados["destino"], self.ENDPOINTS)
 
+    def assert_parser_e_api(self, mensagem, destino, acao="navegar", contexto=None):
+        """Verifica separadamente a classificação local e o contrato HTTP real."""
+        from navegacao_bot import analisar_navegacao
+
+        with self.subTest(camada="parser", mensagem=mensagem):
+            intencao = analisar_navegacao(mensagem, contexto)
+            self.assertEqual(intencao.tipo, "navegar" if acao == "navegar" else "informar")
+            self.assertEqual(intencao.destino, destino)
+        with self.subTest(camada="api", mensagem=mensagem):
+            dados = self.perguntar(mensagem, contexto)
+            self.assert_destino(dados, destino, acao)
+            if acao == "navegar":
+                # O frontend recebe só a ação: não há texto intermediário nem
+                # um segundo botão que exija confirmação para um destino claro.
+                self.assertEqual(set(dados), {"resposta", "fonte", "acao", "destino", "url"})
+
+    def test_regressao_a_essa_pagina_de_upload(self):
+        self.assert_parser_e_api("Me leve para essa página de upload.", "upload")
+
+    def test_regressao_b_esse_local_de_upload(self):
+        self.assert_parser_e_api(
+            "Quero que você me direcione para esse local de upload.", "upload",
+        )
+
+    def test_regressao_c_tarefa_com_comando_de_upload(self):
+        self.assert_parser_e_api(
+            "Quero enviar meus arquivos, me leve para o upload.", "upload",
+        )
+
+    def test_regressao_d_consulta_com_comando_de_historico(self):
+        self.assert_parser_e_api(
+            "Preciso consultar minhas análises anteriores, abra o histórico.", "historico",
+        )
+
+    def test_regressao_e_chamado_com_comando_de_suporte(self):
+        from models import ChamadoSuporte
+
+        antes = self.count(ChamadoSuporte)
+        self.assert_parser_e_api(
+            "Quero abrir um chamado, me leve para o suporte.", "suporte",
+        )
+        self.assertEqual(self.count(ChamadoSuporte), antes)
+
+    def test_demonstrativos_e_artigos_com_destino_explicito(self):
+        for mensagem, destino in (
+            ("Abre essa área de relatórios.", "upload"),
+            ("Quero ir para aquela tela do dashboard.", "dashboard"),
+            ("Me direciona para essa parte do suporte.", "suporte"),
+            ("Quero acessar a página do meu histórico.", "historico"),
+            ("Abra esta página do Guia.", "guia"),
+            ("Me leve para este local de upload.", "upload"),
+            ("Abra aquele painel inicial.", "dashboard"),
+            ("ME LEVE PARA ESSA PÁGINA DO HISTÓRICO!", "historico"),
+        ):
+            self.assert_parser_e_api(mensagem, destino, contexto="suporte")
+
+    def test_tarefa_pessoal_com_navegacao_explicita_nao_executa_operacao(self):
+        from models import Analise, ChamadoSuporte, Notificacao, Usuario
+
+        modelos = (Analise, ChamadoSuporte, Notificacao, Usuario)
+        antes = {modelo: self.count(modelo) for modelo in modelos}
+        for mensagem, destino in (
+            ("Quero enviar meus arquivos, me leve para essa página de upload.", "upload"),
+            ("Preciso ver meu faturamento, abra o dashboard.", "dashboard"),
+            ("Quero consultar minhas análises anteriores, abra o histórico.", "historico"),
+            ("Quero criar um chamado, abre a área de suporte.", "suporte"),
+        ):
+            self.assert_parser_e_api(mensagem, destino)
+        self.assertEqual({modelo: self.count(modelo) for modelo in modelos}, antes)
+        self.assertFalse(any(Path(self.temp.name, "uploads").rglob("*")))
+
+    def test_intencao_pessoal_de_upload_oferece_orientacao(self):
+        for mensagem in (
+            "Quero enviar meus relatórios.",
+            "Quero enviar meus arquivos.",
+            "Preciso fazer o upload dos arquivos de compras.",
+        ):
+            self.assert_parser_e_api(mensagem, "upload", "sugerir_navegacao")
+
+    def test_intencao_pessoal_de_chamado_so_oferece_orientacao(self):
+        from models import ChamadoSuporte
+
+        antes = self.count(ChamadoSuporte)
+        self.assert_parser_e_api("Quero criar um chamado.", "suporte", "sugerir_navegacao")
+        self.assertEqual(self.count(ChamadoSuporte), antes)
+
+    def test_pedidos_de_execucao_continuam_bloqueados_mesmo_com_navegacao(self):
+        from models import Analise, ChamadoSuporte, Notificacao, Usuario
+        from navegacao_bot import analisar_navegacao
+
+        modelos = (Analise, ChamadoSuporte, Notificacao, Usuario)
+        antes = {modelo: self.count(modelo) for modelo in modelos}
+        for mensagem in (
+            "Envie os arquivos de compras para mim.",
+            "Envie meus relatórios automaticamente.",
+            "Quero que você envie meus arquivos, me leve para o upload.",
+            "Quero que você crie um chamado, abra o suporte.",
+            "Exclua minhas análises e depois abra o dashboard.",
+            "Abra o dashboard e execute o ETL.",
+            "Publique o relatório e abra o histórico.",
+            "Quero excluir minhas análises, abra o dashboard.",
+            "Apaga minhas análises e abre o dashboard.",
+            "Deleta os relatórios e abre o histórico.",
+            "Executa o ETL e abre dashboard.",
+            "Envia meus arquivos e abre o upload.",
+            "Excluir minhas análises e abra dashboard.",
+            "Abra meu dashboard. Como funciona isso? Exclua minhas análises.",
+            "Quero enviar meus arquivos automaticamente, me leve upload.",
+            "Preciso criar chamado automaticamente, abra suporte.",
+        ):
+            with self.subTest(camada="parser", mensagem=mensagem):
+                intencao = analisar_navegacao(mensagem, "upload")
+                self.assertEqual(intencao.tipo, "operacao")
+                self.assertIsNone(intencao.destino)
+            with self.subTest(camada="api", mensagem=mensagem):
+                self.assert_sem_acao(self.perguntar(mensagem, "upload"))
+        self.assertEqual({modelo: self.count(modelo) for modelo in modelos}, antes)
+
+    def test_perguntas_informativas_do_pedido_preservam_botao(self):
+        for mensagem, destino in (
+            ("Onde fica o upload?", "upload"),
+            ("Como faço para acessar meu dashboard?", "dashboard"),
+            ("Existe uma área para consultar meus relatórios anteriores?", "historico"),
+            ("Como posso abrir um chamado?", "suporte"),
+            ("Como faço para acessar o histórico?", "historico"),
+        ):
+            self.assert_parser_e_api(mensagem, destino, "sugerir_navegacao")
+
+    def test_contextuais_do_pedido_exigem_contexto_valido(self):
+        from navegacao_bot import analisar_navegacao
+
+        for mensagem in (
+            "Me leva pra lá.", "Pode abrir essa página?", "Quero ir pra esse local.",
+            "Então me direcione.", "Me coloca nessa aba.", "Então me leve até lá.",
+            "Me leva naquela aba.", "Me leve naquele local.",
+        ):
+            self.assert_parser_e_api(mensagem, "guia", contexto="guia")
+            with self.subTest(camada="parser-sem-contexto", mensagem=mensagem):
+                self.assertEqual(analisar_navegacao(mensagem).tipo, "esclarecer")
+            with self.subTest(camada="api-sem-contexto", mensagem=mensagem):
+                self.assert_sem_acao(self.perguntar(mensagem))
+
+    def test_destino_do_comando_prevalece_sobre_tarefa_e_contexto(self):
+        for mensagem, destino in (
+            ("Estou no upload, quero abrir o histórico.", "historico"),
+            ("Abra meu histórico.", "historico"),
+            ("Quero abrir um chamado, me leve para o Guia.", "guia"),
+            ("Quero enviar meus relatórios, abra o dashboard.", "dashboard"),
+        ):
+            self.assert_parser_e_api(mensagem, destino, contexto="upload")
+
+    def test_historico_nao_se_confunde_com_pagina_de_relatorios(self):
+        self.assert_parser_e_api("Abra minha área de relatórios anteriores.", "historico")
+
+    def test_exemplo_na_explicacao_nao_impede_comando_real(self):
+        for mensagem in (
+            "Abra o guia para ver um exemplo.",
+            "Abra o Guia para saber como usar o portal.",
+        ):
+            self.assert_parser_e_api(mensagem, "guia")
+
+    def test_duas_ordens_explicitas_diferentes_pedem_esclarecimento(self):
+        from navegacao_bot import analisar_navegacao
+
+        for mensagem in (
+            "Abra o upload e abra o histórico.",
+            "Me leve upload ou abra dashboard.",
+            "Quero ir upload ou abra dashboard.",
+            "Abra upload ou quero abrir dashboard.",
+            "Quero ir upload e abra dashboard.",
+            "Abra upload e quero abrir dashboard.",
+        ):
+            with self.subTest(camada="parser", mensagem=mensagem):
+                intencao = analisar_navegacao(mensagem, "upload")
+                self.assertEqual(intencao.tipo, "esclarecer")
+                self.assertIsNone(intencao.destino)
+            with self.subTest(camada="api", mensagem=mensagem):
+                self.assert_sem_acao(self.perguntar(mensagem, "upload"))
+
+    def test_negacoes_do_pedido_nao_provocam_navegacao(self):
+        from navegacao_bot import analisar_navegacao
+
+        for mensagem in (
+            "Não me leve para o upload.", "Não quero abrir o dashboard.",
+            "Não me direcione para o histórico.", "Não quero abrir o histórico.",
+            "Não abra essa página de upload.",
+        ):
+            with self.subTest(camada="parser", mensagem=mensagem):
+                self.assertEqual(analisar_navegacao(mensagem, "upload").tipo, "negada")
+            with self.subTest(camada="api", mensagem=mensagem):
+                self.assert_sem_acao(self.perguntar(mensagem, "upload"))
+
+    def test_regressoes_de_navegacao_nao_dependem_de_hugging_face(self):
+        self.app.config["HF_API_TOKEN"] = "token-ficticio-de-teste"
+        with patch("suporte_bot._responder_hf", side_effect=AssertionError("IA não deve definir rotas")) as hf:
+            self.assert_parser_e_api("Me leve para essa página de upload.", "upload")
+            self.assert_parser_e_api("Quero enviar meus arquivos, me leve para o upload.", "upload")
+            self.assert_parser_e_api("Então me leva pra lá.", "upload", contexto="upload")
+            hf.assert_not_called()
+
+    def test_mencoes_de_comandos_nao_sao_ordens_para_navegar(self):
+        from navegacao_bot import analisar_navegacao
+
+        for mensagem in (
+            "Se eu disser abra o histórico, isso vai funcionar?",
+            "Você respondeu abra o histórico.",
+            "A expressão abra upload é um exemplo.",
+        ):
+            with self.subTest(camada="parser", mensagem=mensagem):
+                self.assertNotEqual(analisar_navegacao(mensagem, "upload").tipo, "navegar")
+            with self.subTest(camada="api", mensagem=mensagem):
+                self.assertNotEqual(self.perguntar(mensagem, "upload").get("acao"), "navegar")
+
+    def test_primeiro_acesso_bloqueia_endpoint_ate_troca_de_senha(self):
+        from models import Usuario
+
+        with self.app.app_context():
+            usuario = self.db.session.query(Usuario).filter_by(email="cliente@example.test").one()
+            usuario.primeiro_acesso = True
+            self.db.session.commit()
+        try:
+            with patch("blueprints.api.responder") as responder:
+                resposta = self.post("Abra o upload.", "upload")
+                self.assertEqual(resposta.status_code, 302)
+                self.assertIn("/auth/primeiro-acesso", resposta.headers["Location"])
+                responder.assert_not_called()
+        finally:
+            with self.app.app_context():
+                usuario = self.db.session.query(Usuario).filter_by(email="cliente@example.test").one()
+                usuario.primeiro_acesso = False
+                self.db.session.commit()
+
+    def test_conta_desativada_bloqueia_endpoint_mesmo_com_sessao(self):
+        from models import Usuario
+
+        with self.app.app_context():
+            usuario = self.db.session.query(Usuario).filter_by(email="cliente@example.test").one()
+            usuario.ativo = False
+            self.db.session.commit()
+        try:
+            with patch("blueprints.api.responder") as responder:
+                resposta = self.post("Abra o upload.", "upload")
+                self.assertEqual(resposta.status_code, 302)
+                self.assertIn("/auth/login", resposta.headers["Location"])
+                responder.assert_not_called()
+        finally:
+            with self.app.app_context():
+                usuario = self.db.session.query(Usuario).filter_by(email="cliente@example.test").one()
+                usuario.ativo = True
+                self.db.session.commit()
+
 
 if __name__ == "__main__":
     unittest.main()

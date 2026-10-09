@@ -28,7 +28,8 @@ DESTINOS = {
         (r"\buploads?\b",
          r"\b(?:enviar|envio|mandar|anexar|anexos?)\b(?:\s+\w+){0,6}\s+"
          r"(?:arquivos?|planilhas?|relatorios?|compras|vendas)\b",
-         r"\b(?:pagina|tela|area|aba|secao) (?:de |dos |de meus )?relatorios\b"),
+         r"\b(?:pagina|tela|area|aba|secao) (?:de |dos |de meus )?relatorios\b"
+         r"(?! (?:anteriores|passad[oa]s|antig[oa]s)\b)"),
         "Você pode enviar os arquivos de compras e vendas na seção Enviar Relatórios. "
         "Selecione uma análise disponível e anexe os arquivos correspondentes. "
         "A própria página informa quando não há análise disponível para envio.",
@@ -90,6 +91,15 @@ _INFORMATIVA = re.compile(
     r"\b(?:o que|por que|funciona|funcionam)\b|"
     r"\b(?:existe|tem|ha) (?:uma? |alguma? )?(?:pagina|area|tela|local|lugar|aba|secao)\b"
 )
+# Um verbo citado em uma hipótese ou explicação não é uma ordem ao bot.
+# O guard considera somente o texto anterior ao comando, para manter
+# pedidos como "Abra o Guia para ver um exemplo" como navegação direta.
+_COMANDO_CITADO = re.compile(
+    r"\b(?:se|caso) (?:eu |voce |alguem )?(?:disser|digitar|escrever|pedir)\b|"
+    r"\b(?:voce|vc|o bot|nexobot) (?:disse|respondeu|falou|escreveu)\b|"
+    r"\b(?:frase|expressao|exemplo|comando)\b"
+)
+_DESEJO_NAVEGACAO = re.compile(r"^(?:quero|queria|gostaria|preciso|desejo)\b")
 _ADMIN = re.compile(r"\b(?:admin|administracao|administrador[ae]?s?|administrativ[oa])\b")
 _URL = re.compile(
     r"\b[a-z][a-z0-9+.-]*\s*:\s*/\s*/|"
@@ -99,8 +109,13 @@ _URL = re.compile(
     re.IGNORECASE,
 )
 _OPERACAO = re.compile(
-    r"\b(?:exclua|apague|delete|publique|dispare|crie|altere|edite|modifique|"
-    r"processe|homologue|execute|envie|mande|anexe|troque|cancele|atualize|cadastre)\b|"
+    r"\b(?:exclua|exclui|apague|apaga|delete|deleta|publique|publica|dispare|dispara|"
+    r"crie|cria|altere|altera|edite|edita|modifique|modifica|processe|processa|"
+    r"homologue|homologa|execute|executa|envie|envia|mande|manda|anexe|anexa|"
+    r"troque|troca|cancele|cancela|atualize|atualiza|cadastre|cadastra)\b|"
+    r"(?:^|\b(?:e|depois|entao) )(?:excluir|apagar|deletar|publicar|disparar|"
+    r"criar|alterar|editar|modificar|processar|homologar|executar|enviar|mandar|"
+    r"anexar|trocar|cancelar|atualizar|cadastrar)\b|"
     r"\b(?:quero|preciso|pode|consegue) (?:que voce |que vc |voce |vc )?"
     r"(?:excluir|apagar|deletar|publicar|disparar|criar|alterar|editar|modificar|"
     r"processar|homologar|executar|enviar|mandar|anexar|trocar|cancelar|atualizar|cadastrar)\b"
@@ -114,11 +129,12 @@ _CONTEXTO_PALAVRAS = set(
     "direcione direciona direcionar redirecione redireciona redirecionar mande manda "
     "mandar coloca coloque colocar ponha abre abra abrir acesse acessa acessar "
     "vai va ir entrar entre ver consultar voltar navegar para pra pro ate a ao em "
-    "na no o essa esse esta este nessa nesse nesta neste aquela aquele pagina tela local parte aba lugar "
+    "na no o essa esse esta este nessa nesse nesta neste aquela aquele naquela naquele pagina tela local parte aba lugar "
     "secao la ali aqui".split()
 )
 _PREFIXO_DESTINO = set(
     "para pra pro ate a ao o os as na no em de da do das dos meu minha meus minhas "
+    "essa esse esta este aquela aquele nessa nesse nesta neste naquela naquele "
     "um uma pagina tela local lugar parte aba secao area inicial principal cliente "
     "clientes portal nexo sistema novo nova disponivel abrir ver consultar acessar "
     "falar com equipe onde eu posso pode por favor agora ja so somente logo "
@@ -144,6 +160,44 @@ def _destinos_do_comando(texto: str) -> list[str]:
     return list(dict.fromkeys(nome for _, nome in encontrados))
 
 
+def _destinos_solicitados(texto: str, comandos: list[re.Match]) -> list[str]:
+    """Lê o destino de cada ordem, sem usar a tarefa mencionada antes dela."""
+    trechos = [
+        (comando, texto[comando.end():comandos[i + 1].start()
+                        if i + 1 < len(comandos) else len(texto)])
+        for i, comando in enumerate(comandos)
+    ]
+    ha_ordem = any(not _DESEJO_NAVEGACAO.match(comando.group()) for comando in comandos)
+    destinos = []
+    for comando, trecho in trechos:
+        # Abrir um chamado descreve uma tarefa quando há outra ordem de
+        # navegação. "Quero ir para upload ou abra dashboard", porém, contém
+        # duas páginas solicitadas: nenhum desses destinos pode ser omitido.
+        tarefa_chamado = (
+            _DESEJO_NAVEGACAO.match(comando.group())
+            and comando.group().endswith("abrir")
+            and re.fullmatch(r"\s*(?:(?:um|novo|meu)\s+){0,2}chamado\s*(?:e\s*)?", trecho)
+        )
+        if ha_ordem and tarefa_chamado:
+            continue
+        destinos.extend(_destinos_do_comando(trecho))
+    return list(dict.fromkeys(destinos))
+
+
+def _desejo_de_tarefa(operacao: re.Match, texto: str) -> bool:
+    """Separa o desejo pessoal de envio/chamado de uma ordem de execução."""
+    proximo_comando = _COMANDO.search(texto, operacao.end())
+    tarefa = texto[operacao.end():proximo_comando.start() if proximo_comando else len(texto)]
+    if re.search(r"\b(?:automaticamente|automatic[oa]s?)\b", tarefa):
+        return False
+    if re.fullmatch(r"(?:quero|preciso) (?:enviar|mandar|anexar)", operacao.group()):
+        return True
+    return bool(
+        re.fullmatch(r"(?:quero|preciso) criar", operacao.group())
+        and re.match(r"\s+(?:(?:um|novo|meu)\s+){0,2}chamado\b", texto[operacao.end():])
+    )
+
+
 @dataclass(frozen=True)
 class Intencao:
     tipo: str
@@ -154,9 +208,12 @@ class Intencao:
 def analisar_navegacao(mensagem: str, ultimo_destino=None) -> Intencao:
     """Classifica localmente antes de consultar qualquer modelo de linguagem."""
     texto = normalizar(mensagem)
-    comando = _COMANDO.search(texto)
+    comandos = list(_COMANDO.finditer(texto))
+    comando = comandos[0] if comandos else None
     informativa = _INFORMATIVA.search(texto)
     direta = bool(comando and (not informativa or comando.start() < informativa.start()))
+    if comando and _COMANDO_CITADO.search(texto[:comando.start()]):
+        direta = False
     if comando and re.search(r"\b(?:ver|consultar)$", comando.group()) and re.match(
         r"\s+(?:como|onde|aonde|qual|quais|o que|por que)\b", texto[comando.end():]
     ):
@@ -170,11 +227,13 @@ def analisar_navegacao(mensagem: str, ultimo_destino=None) -> Intencao:
         return Intencao("negada", resposta="Tudo bem. Vou manter você na página atual.")
     # "Me mande para o upload" é navegação; "Envie a planilha" é uma operação.
     for operacao in _OPERACAO.finditer(texto):
-        if informativa and informativa.start() < operacao.start():
+        if not direta and informativa and informativa.start() < operacao.start():
+            continue
+        if _desejo_de_tarefa(operacao, texto):
             continue
         so_mandar_pagina = (
             texto[:operacao.start()].endswith("me ")
-            and re.match(r"(?:mande|manda) (?:para|pra|pro|ate)\b", texto[operacao.start():])
+            and re.match(r"(?:mande|manda) (?:para|pra|pro|ate|a|ao)\b", texto[operacao.start():])
         )
         if not so_mandar_pagina:
             return Intencao(
@@ -182,7 +241,7 @@ def analisar_navegacao(mensagem: str, ultimo_destino=None) -> Intencao:
                 "exclusões ou alterações por você. Realize a operação na interface apropriada do portal.",
             )
 
-    destinos = (_destinos_do_comando(texto[comando.end():]) if direta
+    destinos = (_destinos_solicitados(texto, comandos) if direta
                 else identificar_destinos(mensagem))
     if len(destinos) > 1:
         nomes = " ou ".join(DESTINOS[nome].rotulo for nome in destinos)
