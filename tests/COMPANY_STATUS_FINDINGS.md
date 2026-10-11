@@ -1,10 +1,11 @@
-# Estados empresariais — pendências DEV-05, DEV-06 e DEV-07
+# Estados empresariais — diagnóstico DEV-04 e acompanhamento DEV-05
 
 Diagnóstico realizado em **11 de outubro de 2026**, sobre a base comercial
-`a9d8e2b065dde5b4231b38beb821f53fb5def8a5`. A DEV-04 acrescenta testes e
-documentação; as correções de produção abaixo pertencem às próximas etapas.
+`a9d8e2b065dde5b4231b38beb821f53fb5def8a5`. A DEV-04 acrescentou testes e
+documentação e registrou as pendências abaixo. Essa evidência histórica foi
+preservada; o acompanhamento da DEV-05 está separado do diagnóstico inicial.
 
-## Método e resultados observados
+## DEV-04 — Método e resultados observados
 
 Foram utilizados dois ambientes independentes de `TestEnvironment`, SQLite e
 uploads temporários, `DataFactory`, usuários fictícios e autenticação HTTP com
@@ -31,7 +32,7 @@ Não foi alterada a sessão à mão para autenticar os clientes.
 | Controle de desativação individual | Após `Usuario.ativo=False`, GET do dashboard retornou 302 para login e removeu a autenticação da sessão |
 
 As verificações de reprodução terminaram sem erros e confirmaram esses
-resultados. Elas descrevem o comportamento atual; os cenários desejados que
+resultados. Elas descrevem o estado anterior à DEV-05; os cenários desejados que
 ainda falham não foram adicionados como testes ignorados ou `expectedFailure`.
 
 ## DEV-05 — Bloquear novos logins de empresas CANCELADAS
@@ -41,26 +42,82 @@ iniciar uma sessão autenticada, mesmo com senha válida, usuário individual
 ativo e primeiro acesso concluído. ATIVA e SUSPENSA devem manter o login
 permitido; ADMIN deve manter suas permissões gerais.
 
-**Comportamento atual comprovado:** o login da empresa CANCELADA foi aceito e
+**Comportamento anterior à DEV-05 comprovado:** o login da empresa CANCELADA foi aceito e
 as duas rotas de consulta responderam 200. O cenário demonstra a ausência da
 restrição empresarial no início da sessão.
 
 **Evidência no código:**
 
-- [blueprints/auth.py, linhas 95–105](../blueprints/auth.py#L95): após validar a senha, o login verifica `usuario.ativo` e chama `login_user`; não verifica `empresa.status_conta`.
+- [blueprints/auth.py na base DEV-04, linhas 95–105](https://github.com/Helio965/Nexo-Faturamento-Inteligente/blob/a9d8e2b065dde5b4231b38beb821f53fb5def8a5/blueprints/auth.py#L95): após validar a senha, o login verifica `usuario.ativo` e chama `login_user`; ainda não verifica `empresa.status_conta`.
 - [models.py, linhas 161–163](../models.py#L161): `Usuario.is_active` retorna somente `self.ativo`.
 - [models.py, linhas 96 e 112–114](../models.py#L96): `Empresa.status_conta` é um estado distinto, limitado a ATIVA, SUSPENSA e CANCELADA.
 
-**Risco:** um CLIENTE individualmente ativo continua obtendo uma sessão e
+**Risco observado na DEV-04:** um CLIENTE individualmente ativo continuava obtendo uma sessão e
 acessando rotas privadas após o cancelamento empresarial. Os diagnósticos
 consultaram páginas sem análises publicadas; não demonstram o conteúdo de um
 relatório específico nem acesso a dados de outra empresa.
 
-**Próxima etapa responsável: DEV-05.** Acrescentar cenários para senha válida e
+**Escopo definido para DEV-05:** acrescentar cenários para senha válida e
 inválida em CANCELADA, usuário individual ativo e inativo, primeiro acesso,
 URL `next` para rota protegida e ausência de sessão autenticada após a recusa.
 Confirmar também que os logins de ATIVA, SUSPENSA e ADMIN continuam funcionando
 e que empresas ou usuários de outros cenários não são modificados.
+
+### Acompanhamento DEV-05
+
+A correção parte da base comercial
+`3ff335480cc31c599061126ee85bfb280c02adb7`, com os 125 testes anteriores.
+Seu escopo é o início de novas sessões por `POST /auth/login`: verificar o
+perfil CLIENTE e o estado CANCELADA do relacionamento `usuario.empresa` antes
+de `login_user()`, preservando os controles individuais e as empresas ATIVA e
+SUSPENSA. Cancelamento empresarial e lixeira administrativa continuam sendo
+condições distintas.
+
+**Resultado observado após a correção:** o novo login da empresa CANCELADA foi
+recusado antes da criação da autenticação. Uma reprodução independente em
+11 de outubro de 2026, com Python 3.12.14, repetiu os cenários abaixo usando
+dois `TestEnvironment`, CSRF real e serviços externos simulados. Ambos os
+ambientes temporários foram removidos ao terminar.
+
+| Cenário | Antes da DEV-05 | Após a correção DEV-05 |
+| --- | --- | --- |
+| Novo login CANCELADA, senha válida e usuário ativo | 302 para dashboard e sessão autenticada | 200 no formulário de login, sem `Location`, `_user_id`, `boot_id` ou `_remember` |
+| CANCELADA com `next=/cliente/historico` | O login permitia autenticação | Tentativa recusada; `next` não executado |
+| GET protegido com o cliente do login recusado | Dashboard e histórico respondiam 200 | GET do dashboard redirecionou para login com HTTP 302 |
+| Login ATIVA, SUSPENSA e ADMIN | Permitidos | Login 302 e dashboard do perfil com HTTP 200 |
+| Sessão ATIVA criada antes de cancelar a empresa | Continuava autenticada | Continua autenticada; dashboard e histórico com HTTP 200, pendência DEV-06 |
+| Novo login após cancelar a empresa com sessão antiga ainda aberta | Permitido | Novo cliente recusado; o bloqueio não revoga a sessão antiga |
+
+O estado individual ativo, a senha armazenada e o status empresarial das
+fixtures permaneceram iguais após as tentativas de novos logins. A recusa não
+exige que a sessão inteira fique vazia: token CSRF e dados não autenticados
+continuam permitidos. Os diagnósticos não imprimiram cookies, tokens ou
+credenciais.
+
+**Evidência atual no código:**
+
+- [blueprints/auth.py, linhas 95–107](../blueprints/auth.py#L95): após validar credenciais e usuário ativo, a condição de recusa verifica perfil CLIENTE e o estado CANCELADA de `usuario.empresa`.
+- [blueprints/auth.py, linhas 109–119](../blueprints/auth.py#L109): `login_user()`, o carimbo `boot_id` e o redirecionamento `next` ocorrem depois da recusa empresarial.
+- [blueprints/auth.py, linhas 126–127](../blueprints/auth.py#L126): senha incorreta continua recebendo a mensagem genérica de credenciais inválidas.
+
+A mensagem da recusa empresarial informa que o acesso não está autorizado,
+sem incluir CNPJ, identificadores ou plano. O diagnóstico independente confirma
+o comportamento em execução. O mesmo teste principal que reproduziu a falha
+antes da correção passou sem flexibilizar as asserções. Os resultados locais
+confirmados nesta etapa foram:
+
+| Execução local | Resultado |
+| --- | --- |
+| Teste principal após a correção | 1 teste aprovado em 1,676 s |
+| Suíte específica DEV-05 | 20 testes aprovados em 11,553 s |
+| Suíte completa | 145 testes aprovados em 36,613 s, sem falhas, erros ou testes ignorados |
+
+Esses resultados são locais. A validação do GitHub Actions da feature e o estado
+da Pull Request devem ser conferidos separadamente no relatório desta execução.
+
+A DEV-05 não revoga sessões previamente autenticadas, não altera Socket.IO e
+não modifica os fluxos de tokens. As pendências DEV-06 e DEV-07 abaixo continuam
+separadas dessa correção.
 
 ## DEV-06 — Revogar sessões existentes após cancelamento
 
@@ -74,6 +131,11 @@ dashboard e o histórico permaneceram acessíveis. A autenticação permaneceu n
 sessão. O controle posterior com `Usuario.ativo=False` foi bloqueado, mostrando
 que a guarda existente trata desativação individual, mas não esse cancelamento
 empresarial isolado.
+
+**Rechecagem após DEV-05:** o diagnóstico independente confirmou novamente
+que a sessão anterior ao cancelamento permanece autenticada e obtém HTTP 200
+no dashboard e histórico, embora um novo cliente com as mesmas credenciais
+seja recusado. Essa diferença mantém a revogação de sessões no escopo da DEV-06.
 
 **Evidência no código:**
 
@@ -100,11 +162,18 @@ CANCELADAS devem ser recusadas. Conexões existentes devem perder autorização
 após o cancelamento, conforme a política de revogação definida. A comunicação
 de usuários autorizados e o isolamento entre salas devem permanecer válidos.
 
-**Comportamento atual comprovado:** usando o `socketio.test_client` em memória
+**Comportamento comprovado na DEV-04:** usando o `socketio.test_client` em memória
 e os handlers reais da aplicação, um CLIENTE da empresa CANCELADA conectou;
 uma conexão da empresa ATIVA permaneceu conectada após cancelamento; e uma
 nova conexão com a sessão existente também foi aceita. O controle anônimo foi
 recusado.
+
+**Rechecagem após DEV-05:** a conexão já aberta permaneceu conectada após
+cancelamento e outra conexão usando a sessão antiga também foi aceita. Um
+cliente sem autenticação, após o novo login recusado pela DEV-05, teve o
+handshake recusado. O bloqueio do login reduz esse caminho de obtenção de uma
+nova sessão; o handler Socket.IO e a revogação das conexões antigas continuam
+sem correção nesta etapa.
 
 **Evidência no código:**
 
@@ -129,8 +198,9 @@ comerciais.
 ## Limites da evidência
 
 As reproduções executaram as rotas Flask e os handlers Socket.IO reais com
-clientes de teste em processo. Não houve banco comercial, credencial real,
-conexão de navegador em produção ou alteração do código de produção.
+clientes de teste em processo. Não houve banco comercial, credencial real ou
+conexão de navegador em produção. Os diagnósticos não modificaram o código de
+produção; a correção DEV-05 acrescentou somente a recusa empresarial no login.
 `ExternalServices` simula `socketio.emit`: os resultados comprovam a decisão
 de conexão e sua permanência, mas não a entrega de notificações. Transporte
 WebSocket/polling, origens, infraestrutura distribuída e dados publicados
@@ -139,4 +209,14 @@ permanecem cenários das próximas etapas.
 A restrição administrativa já existente de nova análise para empresas não
 ATIVA fica em [blueprints/admin.py, linhas 215–221](../blueprints/admin.py#L215).
 Sua validação automatizada pertence à DEV-04 e não resolve as pendências de
-login, sessão ou tempo real descritas acima.
+sessão e tempo real DEV-06/DEV-07. Essa restrição administrativa não substituía
+a correção de novos logins implementada na DEV-05.
+
+## DEV-11 — Revisão futura dos tokens de autenticação
+
+A revisão dos tokens de ativação/primeiro acesso e recuperação de senha
+permanece pendente. A DEV-05 trata novos logins por e-mail e senha; os fluxos de
+tokens ficam sem alterações. Expiração, consumo, reutilização e autorização
+empresarial nesses fluxos devem ser avaliados na DEV-11. Não foi executado um
+diagnóstico desses tokens nesta etapa, nem se afirma uma vulnerabilidade
+adicional sem reprodução.

@@ -8,6 +8,7 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 python -m unittest tests.test_infrastructure -v
 python -m unittest tests.test_nexobot -v
 python -m unittest tests.test_company_status -v
+python -m unittest tests.test_cancelled_login -v
 ```
 
 `test_etl.py` é um script separado que exige arquivos de entrada. Não é parte
@@ -28,8 +29,10 @@ da descoberta acima; estes testes não exigem relatórios reais.
 - `test_nexobot.py`: regressões existentes; mantém seus cenários e asserções.
 - `test_company_status.py`: regras de empresas ATIVAS, SUSPENSAS e CANCELADAS,
   com login/CSRF reais, consultas publicadas e criação administrativa de análises.
-- `COMPANY_STATUS_FINDINGS.md`: evidências e cenários pendentes de DEV-05,
-  DEV-06 e DEV-07, sem antecipar suas correções.
+- `COMPANY_STATUS_FINDINGS.md`: diagnóstico histórico DEV-04, validação DEV-05
+  e cenários pendentes de DEV-06, DEV-07 e DEV-11.
+- `test_cancelled_login.py`: regressões DEV-05 para autorização de novos logins,
+  sessão anônima após recusa, integridade, CSRF e limite real de tentativas.
 
 ## Aplicação e banco temporários
 
@@ -210,11 +213,43 @@ confere os dados persistidos, inclusive plano congelado, ADMIN responsável,
 período, modalidade, quinzena e status inicial. As recusas conferem preservação
 dos registros anteriores e dos dados de outras empresas, além da resposta HTTP.
 
-O bloqueio de login de empresa CANCELADA e a revogação de sessões existentes
-pertencem a DEV-05/DEV-06. Não há testes ignorados ou falhas esperadas para
-simular essas correções. Consulte `COMPANY_STATUS_FINDINGS.md` para evidências,
-riscos e próximos cenários. Nenhuma regra de produção ou dependência é alterada.
+O bloqueio de novos logins de empresa CANCELADA é coberto pela suíte DEV-05
+descrita abaixo; a revogação de sessões existentes permanece na DEV-06. Não há
+testes ignorados ou falhas esperadas para simular essas correções. Consulte
+`COMPANY_STATUS_FINDINGS.md` para evidências históricas, validações atuais,
+riscos e próximos cenários. A DEV-04 preservou produção e dependências.
 
 O trabalho foi iniciado após a sincronização GIT-02 e aprovação real do CI na
-branch comercial. A PR da DEV-04 deve apontar para `develop/comercial` e aguardar
-revisão; sua integração não é automática.
+branch comercial. Após a integração da PR #11 à `main`, a GIT-03 incorporou a
+DEV-04 à `develop/comercial` por fast-forward. As próximas PRs comerciais devem
+usar `develop/comercial` como base e aguardar revisão, sem merge automático.
+
+## Novos logins de empresas CANCELADAS — DEV-05
+
+Execute `python -m unittest tests.test_cancelled_login -v` para a suíte focada
+e o comando de descoberta inicial para incluir todas as regressões anteriores.
+Os testes reutilizam a infraestrutura DEV-02, autenticação HTTP real, CSRF
+habilitado, clientes independentes e bancos SQLite temporários.
+
+O bloqueio empresarial ocorre em `blueprints/auth.py`, após validar senha e
+atividade individual e antes de `login_user()`, `boot_id` e redirecionamento
+`next`. CLIENTES de empresas CANCELADAS recebem recusa sem autenticação,
+independentemente de plano ou primeiro acesso. ATIVA, SUSPENSA e ADMIN ativo
+preservam o fluxo autorizado; usuários inativos continuam bloqueados.
+
+As recusas verificam ausência de `_user_id`, `boot_id` e cookie persistente,
+exigência de login nas rotas protegidas e preservação dos dados, inclusive senha,
+publicações históricas e outras empresas. A sessão pode manter CSRF e mensagens
+flash. Os cenários de senha inválida e usuário inexistente mantêm a resposta
+genérica; a recusa empresarial não apresenta dados cadastrais ou do plano.
+
+O ambiente DEV-02 normalmente desliga o rate limiter para isolar os cenários.
+Um teste específico o habilita antes da primeira requisição com a API pública
+`limiter.init_app`, mantendo armazenamento `memory://` e CSRF real: dez POSTs
+são processados e o décimo primeiro recebe HTTP 429. O ciclo de vida existente
+restaura a extensão após o teste. A proteção de produção permanece na rota.
+
+Sessões já abertas após cancelamento (DEV-06), autorização Socket.IO (DEV-07)
+e revisão de tokens de primeiro acesso/recuperação (DEV-11) continuam pendentes.
+A feature parte de `develop/comercial` após GIT-03 e CI comercial aprovado;
+sua PR deve ter essa mesma base e aguardar revisão, sem merge automático.
