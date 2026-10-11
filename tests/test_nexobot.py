@@ -5,14 +5,14 @@ O banco e os uploads ficam em um diretório temporário, sem tocar dados locais.
 """
 
 import html
-import os
 from pathlib import Path
 import re
-import secrets
-import tempfile
 import unittest
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import patch
+
+from tests.support.environment import TestEnvironment
 
 
 class NexoBotTestCase(unittest.TestCase):
@@ -27,43 +27,19 @@ class NexoBotTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # ProductionConfig também é importada pela factory. Reutiliza a chave
-        # existente; somente a ausência recebe uma chave efêmera para os testes.
-        with patch.dict(os.environ, {
-            "SECRET_KEY": os.environ.get("SECRET_KEY") or secrets.token_hex(32),
-        }):
-            from app import create_app
-            from config import Config, config_by_name
-
-        cls.temp = tempfile.TemporaryDirectory(prefix="nexo-bot-tests-")
-        cls.addClassCleanup(cls.temp.cleanup)
-        raiz = Path(cls.temp.name)
-
-        class TestConfig(Config):
-            TESTING = True
-            DEBUG = False
-            SQLALCHEMY_DATABASE_URI = f"sqlite:///{raiz / 'test.db'}"
-            SQLALCHEMY_DIRECT_URI = SQLALCHEMY_DATABASE_URI
-            SQLALCHEMY_ECHO = False
-            UPLOAD_FOLDER = raiz / "uploads"
-            WTF_CSRF_ENABLED = True
-            RATELIMIT_ENABLED = False
-            HF_API_TOKEN = None
-            MAIL_SUPPRESS_SEND = True
-
-        # Configuração aplicada antes de db.init_app e da primeira conexão.
-        # NEXO_DB_DIRECT também aponta para o mesmo banco temporário caso já
-        # esteja configurado no ambiente de quem executa a suíte.
-        with patch.dict(config_by_name, {"nexobot_test": TestConfig}):
-            cls.app = create_app("nexobot_test")
-
-        from extensions import db
+        # Reutiliza a factory e os recursos temporários compartilhados sem
+        # depender de .env, chave comercial ou serviços externos.
+        cls.env = TestEnvironment()
+        cls.addClassCleanup(cls.env.close)
+        cls.env.start()
+        cls.app = cls.env.app
+        cls.temp = SimpleNamespace(name=str(cls.env.root))
+        db = cls.env.db
         from models import Empresa, GuiaTopico, Plano, Segmento, Usuario
 
         cls.db = db
         cls.GuiaTopico = GuiaTopico
         with cls.app.app_context():
-            db.create_all()
             segmento = Segmento(nome_segmento="Segmento de teste")
             plano = Plano(
                 nome_plano="BRONZE", valor_mensal=1, qtd_analises_mes=1,
@@ -89,13 +65,6 @@ class NexoBotTestCase(unittest.TestCase):
                 usuario.set_senha(cls.SENHA)
                 db.session.add(usuario)
             db.session.commit()
-
-        def dispose_db():
-            with cls.app.app_context():
-                db.session.remove()
-                db.engine.dispose()
-
-        cls.addClassCleanup(dispose_db)
 
     def setUp(self):
         self.app.config["HF_API_TOKEN"] = None
