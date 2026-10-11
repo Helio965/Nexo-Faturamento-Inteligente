@@ -7,6 +7,7 @@ Execute os comandos a partir da raiz do repositório:
 python -m unittest discover -s tests -p 'test_*.py' -v
 python -m unittest tests.test_infrastructure -v
 python -m unittest tests.test_nexobot -v
+python -m unittest tests.test_company_status -v
 ```
 
 `test_etl.py` é um script separado que exige arquivos de entrada. Não é parte
@@ -25,6 +26,10 @@ da descoberta acima; estes testes não exigem relatórios reais.
   simulados, com argumentos e falhas observáveis.
 - `test_infrastructure.py`: verifica os contratos desta infraestrutura.
 - `test_nexobot.py`: regressões existentes; mantém seus cenários e asserções.
+- `test_company_status.py`: regras de empresas ATIVAS, SUSPENSAS e CANCELADAS,
+  com login/CSRF reais, consultas publicadas e criação administrativa de análises.
+- `COMPANY_STATUS_FINDINGS.md`: evidências e cenários pendentes de DEV-05,
+  DEV-06 e DEV-07, sem antecipar suas correções.
 
 ## Aplicação e banco temporários
 
@@ -190,3 +195,26 @@ credenciais Git. Nenhum secret comercial é fornecido. A infraestrutura DEV-02
 continua responsável pelo SQLite e arquivos temporários, pela configuração
 segura e pelos serviços simulados. O workflow não executa migrations, deploy,
 scripts de inicialização do banco ou alterações automáticas no repositório.
+
+## Estados empresariais — DEV-04
+
+Execute `python -m unittest tests.test_company_status -v` para a suíte focada e
+o comando de descoberta acima para validar também os testes anteriores.
+Cada método reutiliza `IsolatedTestCase`, `DataFactory` e os helpers HTTP da
+DEV-02, mantendo SQLite temporário, CSRF habilitado e serviços externos simulados.
+
+ATIVA/BRONZE e SUSPENSA/PRATA validam login de CLIENTE ativo, dashboard,
+histórico e análise própria concluída com relatório publicado. CANCELADA/OURO
+valida as restrições administrativas já implementadas. A criação permitida
+confere os dados persistidos, inclusive plano congelado, ADMIN responsável,
+período, modalidade, quinzena e status inicial. As recusas conferem preservação
+dos registros anteriores e dos dados de outras empresas, além da resposta HTTP.
+
+O bloqueio de login de empresa CANCELADA e a revogação de sessões existentes
+pertencem a DEV-05/DEV-06. Não há testes ignorados ou falhas esperadas para
+simular essas correções. Consulte `COMPANY_STATUS_FINDINGS.md` para evidências,
+riscos e próximos cenários. Nenhuma regra de produção ou dependência é alterada.
+
+O trabalho foi iniciado após a sincronização GIT-02 e aprovação real do CI na
+branch comercial. A PR da DEV-04 deve apontar para `develop/comercial` e aguardar
+revisão; sua integração não é automática.
