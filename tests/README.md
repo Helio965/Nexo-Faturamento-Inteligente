@@ -145,4 +145,48 @@ continuam reais; isso permite verificar bytes e falhas sem tocar uploads locais.
 A DEV-02 valida a infraestrutura. Ela não corrige cancelamento empresarial,
 reutilização de tokens, efeitos antes de commit, atomicidade de arquivos,
 indicadores ou publicação. Testes completos dessas regras pertencem às etapas
-seguintes; GitHub Actions pertence à DEV-03.
+seguintes.
+
+## Integração contínua — DEV-03
+
+O workflow `.github/workflows/tests.yml` executa os testes em um runner Linux
+`ubuntu-24.04`, com Python 3.12 e as dependências de `requirements.txt`. Há um
+único job, sem paralelismo entre os testes. A descoberta deve encontrar pelo
+menos um teste; depois, a suíte completa é executada pelo mesmo comando local:
+
+```bash
+python -m unittest discover -s tests -p "test_*.py" -v
+```
+
+Não há quantidade fixa de testes: novos arquivos `test_*.py` em `tests/` e
+métodos `test_*` em classes `unittest.TestCase` entram na descoberta. Use os
+helpers descritos acima para manter os dados e serviços isolados.
+
+O workflow inicia em:
+
+- Push em `develop/comercial` ou em branches `feature/**`.
+- Pull Requests destinadas a `develop/comercial` ou `main`; o filtro considera
+  a branch de destino da PR.
+
+As Pull Requests do desenvolvimento comercial devem ter **`develop/comercial`
+como destino**. O push em `feature/dev-03-github-actions` permite verificar a
+primeira execução antes de abrir a PR ou realizar qualquer merge.
+
+Na aba **Actions** do repositório, selecione **NEXO - Testes automatizados**,
+abra a execução correspondente ao commit e confira o job **unittest (Python
+3.12)**. Os passos mostram a preparação do Python, a instalação das
+dependências, a quantidade descoberta e o resultado da suíte. A primeira
+validação só está concluída quando uma execução real no GitHub termina com
+`success`; um resultado local não comprova a execução no GitHub. Confira também
+o check da Pull Request e se houve uma execução do evento `pull_request`.
+
+Erros de instalação, descoberta vazia e falhas ou erros nos testes reprovam o
+job. No passo de execução, `FAIL` ou `ERROR` identifica o caso e o traceback
+explica a falha; o resumo do unittest informa o total e eventuais testes
+ignorados. Não ignore erros nem faça merge para forçar a validação.
+
+O token do workflow tem somente `contents: read`, e o checkout não persiste
+credenciais Git. Nenhum secret comercial é fornecido. A infraestrutura DEV-02
+continua responsável pelo SQLite e arquivos temporários, pela configuração
+segura e pelos serviços simulados. O workflow não executa migrations, deploy,
+scripts de inicialização do banco ou alterações automáticas no repositório.
