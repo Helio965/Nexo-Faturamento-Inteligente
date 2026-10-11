@@ -98,6 +98,14 @@ def login():
                 flash("Esta conta está desativada. Contacte o administrador.", "danger")
                 return render_template("auth/login.html")
 
+            if (
+                usuario.is_cliente
+                and usuario.empresa is not None
+                and usuario.empresa.status_conta == "CANCELADA"
+            ):
+                flash("O acesso desta conta não está autorizado. Contacte o administrador.", "danger")
+                return render_template("auth/login.html")
+
             # Efetua o login na sessão (sem "remember": cookie morre ao fechar o
             # navegador). Carimba a sessão com o BOOT_ID atual para que um
             # restart do servidor invalide o login automaticamente.
